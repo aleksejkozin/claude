@@ -14,12 +14,10 @@
         html, body {
             height: 100%;
             width: 100%;
+            overflow: hidden;
         }
 
         body {
-            display: flex;
-            justify-content: center;
-            align-items: center;
             background-color: #f0f0f0;
         }
 
@@ -27,10 +25,212 @@
             width: 50vmin;
             height: 50vmin;
             background-color: #0066cc;
+            position: absolute;
+            cursor: grab;
+            user-select: none;
+        }
+
+        .blue-square:active {
+            cursor: grabbing;
         }
     </style>
 </head>
 <body>
-    <div class="blue-square"></div>
+    <div class="blue-square" id="square"></div>
+
+    <script>
+        const square = document.getElementById('square');
+
+        // Physics state
+        let x, y;
+        let vx = 0;
+        let vy = 0;
+
+        // Physics constants
+        const gravity = 800;
+        const friction = 0.98;
+        const bounceDamping = 0.6;
+
+        // Drag state
+        let isDragging = false;
+        let dragOffsetX = 0;
+        let dragOffsetY = 0;
+        let lastMouseX = 0;
+        let lastMouseY = 0;
+        let lastTime = 0;
+
+        // Initialize position (centered)
+        function initPosition() {
+            const rect = square.getBoundingClientRect();
+            x = (window.innerWidth - rect.width) / 2;
+            y = (window.innerHeight - rect.height) / 2;
+            updatePosition();
+        }
+
+        function updatePosition() {
+            square.style.left = x + 'px';
+            square.style.top = y + 'px';
+        }
+
+        function getSquareSize() {
+            const rect = square.getBoundingClientRect();
+            return { width: rect.width, height: rect.height };
+        }
+
+        // Constrain to screen boundaries
+        function constrainToBounds() {
+            const size = getSquareSize();
+            const maxX = window.innerWidth - size.width;
+            const maxY = window.innerHeight - size.height;
+
+            // Bounce off walls
+            if (x < 0) {
+                x = 0;
+                vx = -vx * bounceDamping;
+            } else if (x > maxX) {
+                x = maxX;
+                vx = -vx * bounceDamping;
+            }
+
+            if (y < 0) {
+                y = 0;
+                vy = -vy * bounceDamping;
+            } else if (y > maxY) {
+                y = maxY;
+                vy = -vy * bounceDamping;
+            }
+        }
+
+        // Physics update loop
+        let lastFrameTime = performance.now();
+
+        function physicsLoop(currentTime) {
+            const dt = (currentTime - lastFrameTime) / 1000;
+            lastFrameTime = currentTime;
+
+            if (!isDragging) {
+                // Apply gravity
+                vy += gravity * dt;
+
+                // Apply friction
+                vx *= friction;
+                vy *= friction;
+
+                // Update position
+                x += vx * dt;
+                y += vy * dt;
+
+                // Constrain to bounds
+                constrainToBounds();
+
+                // Update DOM
+                updatePosition();
+            }
+
+            requestAnimationFrame(physicsLoop);
+        }
+
+        // Mouse events
+        function onMouseDown(e) {
+            isDragging = true;
+            const rect = square.getBoundingClientRect();
+            dragOffsetX = e.clientX - rect.left;
+            dragOffsetY = e.clientY - rect.top;
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+            lastTime = performance.now();
+            vx = 0;
+            vy = 0;
+        }
+
+        function onMouseMove(e) {
+            if (!isDragging) return;
+
+            const currentTime = performance.now();
+            const dt = (currentTime - lastTime) / 1000;
+
+            if (dt > 0) {
+                // Calculate velocity from mouse movement
+                vx = (e.clientX - lastMouseX) / dt;
+                vy = (e.clientY - lastMouseY) / dt;
+            }
+
+            x = e.clientX - dragOffsetX;
+            y = e.clientY - dragOffsetY;
+
+            constrainToBounds();
+            updatePosition();
+
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+            lastTime = currentTime;
+        }
+
+        function onMouseUp() {
+            isDragging = false;
+        }
+
+        // Touch events
+        function onTouchStart(e) {
+            e.preventDefault();
+            const touch = e.touches[0];
+            isDragging = true;
+            const rect = square.getBoundingClientRect();
+            dragOffsetX = touch.clientX - rect.left;
+            dragOffsetY = touch.clientY - rect.top;
+            lastMouseX = touch.clientX;
+            lastMouseY = touch.clientY;
+            lastTime = performance.now();
+            vx = 0;
+            vy = 0;
+        }
+
+        function onTouchMove(e) {
+            if (!isDragging) return;
+            e.preventDefault();
+
+            const touch = e.touches[0];
+            const currentTime = performance.now();
+            const dt = (currentTime - lastTime) / 1000;
+
+            if (dt > 0) {
+                vx = (touch.clientX - lastMouseX) / dt;
+                vy = (touch.clientY - lastMouseY) / dt;
+            }
+
+            x = touch.clientX - dragOffsetX;
+            y = touch.clientY - dragOffsetY;
+
+            constrainToBounds();
+            updatePosition();
+
+            lastMouseX = touch.clientX;
+            lastMouseY = touch.clientY;
+            lastTime = currentTime;
+        }
+
+        function onTouchEnd() {
+            isDragging = false;
+        }
+
+        // Event listeners
+        square.addEventListener('mousedown', onMouseDown);
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+
+        square.addEventListener('touchstart', onTouchStart, { passive: false });
+        document.addEventListener('touchmove', onTouchMove, { passive: false });
+        document.addEventListener('touchend', onTouchEnd);
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            constrainToBounds();
+            updatePosition();
+        });
+
+        // Initialize
+        initPosition();
+        requestAnimationFrame(physicsLoop);
+    </script>
 </body>
 </html>
