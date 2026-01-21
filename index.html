@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Blue Square</title>
+    <title>Blue Squares</title>
     <style>
         * {
             margin: 0;
@@ -21,83 +21,160 @@
             background-color: #f0f0f0;
         }
 
-        .blue-square {
-            width: 50vmin;
-            height: 50vmin;
-            background-color: #0066cc;
+        .square {
             position: absolute;
             cursor: grab;
             user-select: none;
         }
 
-        .blue-square:active {
+        .square:active {
             cursor: grabbing;
         }
     </style>
 </head>
 <body>
-    <div class="blue-square" id="square"></div>
-
     <script>
-        const square = document.getElementById('square');
-
-        // Physics state
-        let x, y;
-        let vx = 0;
-        let vy = 0;
+        // Square configurations
+        const squareConfigs = [
+            { size: 120, color: '#0066cc' },
+            { size: 80, color: '#cc3300' },
+            { size: 100, color: '#339933' },
+            { size: 60, color: '#9933cc' },
+            { size: 90, color: '#ff9900' },
+        ];
 
         // Physics constants
         const gravity = 800;
-        const friction = 0.98;
-        const bounceDamping = 0.6;
+        const friction = 0.99;
+        const bounceDamping = 0.7;
+        const collisionDamping = 0.9;
+
+        // All squares
+        const squares = [];
 
         // Drag state
-        let isDragging = false;
+        let draggedSquare = null;
         let dragOffsetX = 0;
         let dragOffsetY = 0;
         let lastMouseX = 0;
         let lastMouseY = 0;
         let lastTime = 0;
 
-        // Initialize position (centered)
-        function initPosition() {
-            const rect = square.getBoundingClientRect();
-            x = (window.innerWidth - rect.width) / 2;
-            y = (window.innerHeight - rect.height) / 2;
-            updatePosition();
+        // Create squares
+        function createSquares() {
+            squareConfigs.forEach((config, index) => {
+                const element = document.createElement('div');
+                element.className = 'square';
+                element.style.width = config.size + 'px';
+                element.style.height = config.size + 'px';
+                element.style.backgroundColor = config.color;
+                document.body.appendChild(element);
+
+                const square = {
+                    element: element,
+                    size: config.size,
+                    mass: config.size * config.size,
+                    x: 100 + index * 130,
+                    y: 50 + index * 80,
+                    vx: 0,
+                    vy: 0
+                };
+
+                squares.push(square);
+                updateSquarePosition(square);
+
+                // Mouse events
+                element.addEventListener('mousedown', (e) => onMouseDown(e, square));
+
+                // Touch events
+                element.addEventListener('touchstart', (e) => onTouchStart(e, square), { passive: false });
+            });
         }
 
-        function updatePosition() {
-            square.style.left = x + 'px';
-            square.style.top = y + 'px';
-        }
-
-        function getSquareSize() {
-            const rect = square.getBoundingClientRect();
-            return { width: rect.width, height: rect.height };
+        function updateSquarePosition(square) {
+            square.element.style.left = square.x + 'px';
+            square.element.style.top = square.y + 'px';
         }
 
         // Constrain to screen boundaries
-        function constrainToBounds() {
-            const size = getSquareSize();
-            const maxX = window.innerWidth - size.width;
-            const maxY = window.innerHeight - size.height;
+        function constrainToBounds(square) {
+            const maxX = window.innerWidth - square.size;
+            const maxY = window.innerHeight - square.size;
 
-            // Bounce off walls
-            if (x < 0) {
-                x = 0;
-                vx = -vx * bounceDamping;
-            } else if (x > maxX) {
-                x = maxX;
-                vx = -vx * bounceDamping;
+            if (square.x < 0) {
+                square.x = 0;
+                square.vx = -square.vx * bounceDamping;
+            } else if (square.x > maxX) {
+                square.x = maxX;
+                square.vx = -square.vx * bounceDamping;
             }
 
-            if (y < 0) {
-                y = 0;
-                vy = -vy * bounceDamping;
-            } else if (y > maxY) {
-                y = maxY;
-                vy = -vy * bounceDamping;
+            if (square.y < 0) {
+                square.y = 0;
+                square.vy = -square.vy * bounceDamping;
+            } else if (square.y > maxY) {
+                square.y = maxY;
+                square.vy = -square.vy * bounceDamping;
+            }
+        }
+
+        // Check collision between two squares (AABB)
+        function checkCollision(a, b) {
+            return a.x < b.x + b.size &&
+                   a.x + a.size > b.x &&
+                   a.y < b.y + b.size &&
+                   a.y + a.size > b.y;
+        }
+
+        // Resolve collision between two squares
+        function resolveCollision(a, b) {
+            // Calculate overlap on each axis
+            const overlapX = Math.min(a.x + a.size - b.x, b.x + b.size - a.x);
+            const overlapY = Math.min(a.y + a.size - b.y, b.y + b.size - a.y);
+
+            // Determine collision axis (smallest overlap)
+            if (overlapX < overlapY) {
+                // Horizontal collision
+                const totalMass = a.mass + b.mass;
+
+                // Separate squares
+                if (a.x < b.x) {
+                    const separation = overlapX / 2 + 1;
+                    a.x -= separation * (b.mass / totalMass);
+                    b.x += separation * (a.mass / totalMass);
+                } else {
+                    const separation = overlapX / 2 + 1;
+                    a.x += separation * (b.mass / totalMass);
+                    b.x -= separation * (a.mass / totalMass);
+                }
+
+                // Exchange velocities (elastic collision with mass)
+                const newVxA = ((a.mass - b.mass) * a.vx + 2 * b.mass * b.vx) / totalMass;
+                const newVxB = ((b.mass - a.mass) * b.vx + 2 * a.mass * a.vx) / totalMass;
+
+                a.vx = newVxA * collisionDamping;
+                b.vx = newVxB * collisionDamping;
+            } else {
+                // Vertical collision
+                const totalMass = a.mass + b.mass;
+
+                // Separate squares
+                if (a.y < b.y) {
+                    const separation = overlapY / 2 + 1;
+                    a.y -= separation * (b.mass / totalMass);
+                    b.y += separation * (a.mass / totalMass);
+                } else {
+                    const separation = overlapY / 2 + 1;
+                    a.y += separation * (b.mass / totalMass);
+                    b.y -= separation * (a.mass / totalMass);
+                }
+
+                // Exchange velocities (elastic collision with mass)
+                const newVyA = ((a.mass - b.mass) * a.vy + 2 * b.mass * b.vy) / totalMass;
+                const newVyB = ((b.mass - a.mass) * b.vy + 2 * a.mass * a.vy) / totalMass;
+
+                a.vy = newVyA * collisionDamping;
+                b.vy = newVyB * collisionDamping;
             }
         }
 
@@ -105,61 +182,74 @@
         let lastFrameTime = performance.now();
 
         function physicsLoop(currentTime) {
-            const dt = (currentTime - lastFrameTime) / 1000;
+            const dt = Math.min((currentTime - lastFrameTime) / 1000, 0.05);
             lastFrameTime = currentTime;
 
-            if (!isDragging) {
-                // Apply gravity
-                vy += gravity * dt;
+            // Update each square
+            squares.forEach(square => {
+                if (square !== draggedSquare) {
+                    // Apply gravity
+                    square.vy += gravity * dt;
 
-                // Apply friction
-                vx *= friction;
-                vy *= friction;
+                    // Apply friction
+                    square.vx *= friction;
+                    square.vy *= friction;
 
-                // Update position
-                x += vx * dt;
-                y += vy * dt;
+                    // Update position
+                    square.x += square.vx * dt;
+                    square.y += square.vy * dt;
+                }
 
                 // Constrain to bounds
-                constrainToBounds();
+                constrainToBounds(square);
+            });
 
-                // Update DOM
-                updatePosition();
+            // Check collisions between all pairs
+            for (let i = 0; i < squares.length; i++) {
+                for (let j = i + 1; j < squares.length; j++) {
+                    if (checkCollision(squares[i], squares[j])) {
+                        resolveCollision(squares[i], squares[j]);
+                    }
+                }
             }
+
+            // Update DOM
+            squares.forEach(updateSquarePosition);
 
             requestAnimationFrame(physicsLoop);
         }
 
         // Mouse events
-        function onMouseDown(e) {
-            isDragging = true;
-            const rect = square.getBoundingClientRect();
-            dragOffsetX = e.clientX - rect.left;
-            dragOffsetY = e.clientY - rect.top;
+        function onMouseDown(e, square) {
+            draggedSquare = square;
+            dragOffsetX = e.clientX - square.x;
+            dragOffsetY = e.clientY - square.y;
             lastMouseX = e.clientX;
             lastMouseY = e.clientY;
             lastTime = performance.now();
-            vx = 0;
-            vy = 0;
+            square.vx = 0;
+            square.vy = 0;
+
+            // Bring to front
+            square.element.style.zIndex = Date.now();
         }
 
         function onMouseMove(e) {
-            if (!isDragging) return;
+            if (!draggedSquare) return;
 
             const currentTime = performance.now();
             const dt = (currentTime - lastTime) / 1000;
 
             if (dt > 0) {
-                // Calculate velocity from mouse movement
-                vx = (e.clientX - lastMouseX) / dt;
-                vy = (e.clientY - lastMouseY) / dt;
+                draggedSquare.vx = (e.clientX - lastMouseX) / dt;
+                draggedSquare.vy = (e.clientY - lastMouseY) / dt;
             }
 
-            x = e.clientX - dragOffsetX;
-            y = e.clientY - dragOffsetY;
+            draggedSquare.x = e.clientX - dragOffsetX;
+            draggedSquare.y = e.clientY - dragOffsetY;
 
-            constrainToBounds();
-            updatePosition();
+            constrainToBounds(draggedSquare);
+            updateSquarePosition(draggedSquare);
 
             lastMouseX = e.clientX;
             lastMouseY = e.clientY;
@@ -167,26 +257,27 @@
         }
 
         function onMouseUp() {
-            isDragging = false;
+            draggedSquare = null;
         }
 
         // Touch events
-        function onTouchStart(e) {
+        function onTouchStart(e, square) {
             e.preventDefault();
             const touch = e.touches[0];
-            isDragging = true;
-            const rect = square.getBoundingClientRect();
-            dragOffsetX = touch.clientX - rect.left;
-            dragOffsetY = touch.clientY - rect.top;
+            draggedSquare = square;
+            dragOffsetX = touch.clientX - square.x;
+            dragOffsetY = touch.clientY - square.y;
             lastMouseX = touch.clientX;
             lastMouseY = touch.clientY;
             lastTime = performance.now();
-            vx = 0;
-            vy = 0;
+            square.vx = 0;
+            square.vy = 0;
+
+            square.element.style.zIndex = Date.now();
         }
 
         function onTouchMove(e) {
-            if (!isDragging) return;
+            if (!draggedSquare) return;
             e.preventDefault();
 
             const touch = e.touches[0];
@@ -194,15 +285,15 @@
             const dt = (currentTime - lastTime) / 1000;
 
             if (dt > 0) {
-                vx = (touch.clientX - lastMouseX) / dt;
-                vy = (touch.clientY - lastMouseY) / dt;
+                draggedSquare.vx = (touch.clientX - lastMouseX) / dt;
+                draggedSquare.vy = (touch.clientY - lastMouseY) / dt;
             }
 
-            x = touch.clientX - dragOffsetX;
-            y = touch.clientY - dragOffsetY;
+            draggedSquare.x = touch.clientX - dragOffsetX;
+            draggedSquare.y = touch.clientY - dragOffsetY;
 
-            constrainToBounds();
-            updatePosition();
+            constrainToBounds(draggedSquare);
+            updateSquarePosition(draggedSquare);
 
             lastMouseX = touch.clientX;
             lastMouseY = touch.clientY;
@@ -210,26 +301,23 @@
         }
 
         function onTouchEnd() {
-            isDragging = false;
+            draggedSquare = null;
         }
 
-        // Event listeners
-        square.addEventListener('mousedown', onMouseDown);
+        // Global event listeners
         document.addEventListener('mousemove', onMouseMove);
         document.addEventListener('mouseup', onMouseUp);
-
-        square.addEventListener('touchstart', onTouchStart, { passive: false });
         document.addEventListener('touchmove', onTouchMove, { passive: false });
         document.addEventListener('touchend', onTouchEnd);
 
         // Handle window resize
         window.addEventListener('resize', () => {
-            constrainToBounds();
-            updatePosition();
+            squares.forEach(constrainToBounds);
+            squares.forEach(updateSquarePosition);
         });
 
         // Initialize
-        initPosition();
+        createSquares();
         requestAnimationFrame(physicsLoop);
     </script>
 </body>
