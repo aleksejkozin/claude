@@ -45,9 +45,10 @@
 
         // Physics constants
         const gravity = 800;
-        const friction = 0.99;
-        const bounceDamping = 0.7;
-        const collisionDamping = 0.9;
+        const friction = 0.92;
+        const bounceDamping = 0.5;
+        const collisionDamping = 0.7;
+        const velocityThreshold = 5;
 
         // All squares
         const squares = [];
@@ -104,17 +105,21 @@
             if (square.x < 0) {
                 square.x = 0;
                 square.vx = -square.vx * bounceDamping;
+                if (Math.abs(square.vx) < velocityThreshold) square.vx = 0;
             } else if (square.x > maxX) {
                 square.x = maxX;
                 square.vx = -square.vx * bounceDamping;
+                if (Math.abs(square.vx) < velocityThreshold) square.vx = 0;
             }
 
             if (square.y < 0) {
                 square.y = 0;
                 square.vy = -square.vy * bounceDamping;
+                if (Math.abs(square.vy) < velocityThreshold) square.vy = 0;
             } else if (square.y > maxY) {
                 square.y = maxY;
                 square.vy = -square.vy * bounceDamping;
+                if (Math.abs(square.vy) < velocityThreshold) square.vy = 0;
             }
         }
 
@@ -132,49 +137,47 @@
             const overlapX = Math.min(a.x + a.size - b.x, b.x + b.size - a.x);
             const overlapY = Math.min(a.y + a.size - b.y, b.y + b.size - a.y);
 
+            const totalMass = a.mass + b.mass;
+            const aRatio = b.mass / totalMass;
+            const bRatio = a.mass / totalMass;
+
             // Determine collision axis (smallest overlap)
             if (overlapX < overlapY) {
-                // Horizontal collision
-                const totalMass = a.mass + b.mass;
-
-                // Separate squares
+                // Horizontal collision - fully separate
                 if (a.x < b.x) {
-                    const separation = overlapX / 2 + 1;
-                    a.x -= separation * (b.mass / totalMass);
-                    b.x += separation * (a.mass / totalMass);
+                    a.x -= overlapX * aRatio;
+                    b.x += overlapX * bRatio;
                 } else {
-                    const separation = overlapX / 2 + 1;
-                    a.x += separation * (b.mass / totalMass);
-                    b.x -= separation * (a.mass / totalMass);
+                    a.x += overlapX * aRatio;
+                    b.x -= overlapX * bRatio;
                 }
 
-                // Exchange velocities (elastic collision with mass)
-                const newVxA = ((a.mass - b.mass) * a.vx + 2 * b.mass * b.vx) / totalMass;
-                const newVxB = ((b.mass - a.mass) * b.vx + 2 * a.mass * a.vx) / totalMass;
-
-                a.vx = newVxA * collisionDamping;
-                b.vx = newVxB * collisionDamping;
+                // Only exchange velocities if moving toward each other
+                const relativeVx = a.vx - b.vx;
+                if ((a.x < b.x && relativeVx > 0) || (a.x > b.x && relativeVx < 0)) {
+                    const newVxA = ((a.mass - b.mass) * a.vx + 2 * b.mass * b.vx) / totalMass;
+                    const newVxB = ((b.mass - a.mass) * b.vx + 2 * a.mass * a.vx) / totalMass;
+                    a.vx = newVxA * collisionDamping;
+                    b.vx = newVxB * collisionDamping;
+                }
             } else {
-                // Vertical collision
-                const totalMass = a.mass + b.mass;
-
-                // Separate squares
+                // Vertical collision - fully separate
                 if (a.y < b.y) {
-                    const separation = overlapY / 2 + 1;
-                    a.y -= separation * (b.mass / totalMass);
-                    b.y += separation * (a.mass / totalMass);
+                    a.y -= overlapY * aRatio;
+                    b.y += overlapY * bRatio;
                 } else {
-                    const separation = overlapY / 2 + 1;
-                    a.y += separation * (b.mass / totalMass);
-                    b.y -= separation * (a.mass / totalMass);
+                    a.y += overlapY * aRatio;
+                    b.y -= overlapY * bRatio;
                 }
 
-                // Exchange velocities (elastic collision with mass)
-                const newVyA = ((a.mass - b.mass) * a.vy + 2 * b.mass * b.vy) / totalMass;
-                const newVyB = ((b.mass - a.mass) * b.vy + 2 * a.mass * a.vy) / totalMass;
-
-                a.vy = newVyA * collisionDamping;
-                b.vy = newVyB * collisionDamping;
+                // Only exchange velocities if moving toward each other
+                const relativeVy = a.vy - b.vy;
+                if ((a.y < b.y && relativeVy > 0) || (a.y > b.y && relativeVy < 0)) {
+                    const newVyA = ((a.mass - b.mass) * a.vy + 2 * b.mass * b.vy) / totalMass;
+                    const newVyB = ((b.mass - a.mass) * b.vy + 2 * a.mass * a.vy) / totalMass;
+                    a.vy = newVyA * collisionDamping;
+                    b.vy = newVyB * collisionDamping;
+                }
             }
         }
 
@@ -191,27 +194,35 @@
                     // Apply gravity
                     square.vy += gravity * dt;
 
-                    // Apply friction
+                    // Apply friction (more on horizontal for ground feel)
                     square.vx *= friction;
-                    square.vy *= friction;
 
                     // Update position
                     square.x += square.vx * dt;
                     square.y += square.vy * dt;
+
+                    // Zero out tiny velocities to prevent jitter
+                    if (Math.abs(square.vx) < velocityThreshold) square.vx = 0;
+                    if (Math.abs(square.vy) < velocityThreshold && square.vy > 0) square.vy = 0;
                 }
 
                 // Constrain to bounds
                 constrainToBounds(square);
             });
 
-            // Check collisions between all pairs
-            for (let i = 0; i < squares.length; i++) {
-                for (let j = i + 1; j < squares.length; j++) {
-                    if (checkCollision(squares[i], squares[j])) {
-                        resolveCollision(squares[i], squares[j]);
+            // Run multiple collision iterations to stabilize stacking
+            for (let iter = 0; iter < 3; iter++) {
+                for (let i = 0; i < squares.length; i++) {
+                    for (let j = i + 1; j < squares.length; j++) {
+                        if (checkCollision(squares[i], squares[j])) {
+                            resolveCollision(squares[i], squares[j]);
+                        }
                     }
                 }
             }
+
+            // Final bounds check after collision resolution
+            squares.forEach(constrainToBounds);
 
             // Update DOM
             squares.forEach(updateSquarePosition);
