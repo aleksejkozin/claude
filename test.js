@@ -7,6 +7,7 @@ class PhysicsEngine {
         this.bounceDamping = config.bounceDamping ?? 0.5;
         this.collisionDamping = config.collisionDamping ?? 0.8;
         this.velocityThreshold = config.velocityThreshold ?? 5;
+        this.minBounceRatio = config.minBounceRatio ?? 0.3; // Minimum bounce as ratio of approach velocity
         this.bounds = config.bounds ?? { width: 800, height: 600 };
         this.squares = [];
     }
@@ -15,7 +16,7 @@ class PhysicsEngine {
         const square = {
             id: config.id ?? this.squares.length,
             size: config.size,
-            mass: config.size * config.size,
+            mass: config.size, // Linear mass for more balanced bounces
             x: config.x ?? 0,
             y: config.y ?? 0,
             vx: config.vx ?? 0,
@@ -60,6 +61,7 @@ class PhysicsEngine {
         const bRatio = a.mass / totalMass;
 
         if (info.isHorizontal) {
+            // Separate horizontally
             if (info.aLeftOfB) {
                 a.x -= info.overlapX * aRatio;
                 b.x += info.overlapX * bRatio;
@@ -68,16 +70,23 @@ class PhysicsEngine {
                 b.x -= info.overlapX * bRatio;
             }
 
-            const relVx = a.vx - b.vx;
-            const approachingH = info.aLeftOfB ? relVx > 0 : relVx < 0;
+            // Calculate relative velocity along collision normal
+            const normalDir = info.aLeftOfB ? 1 : -1;
+            const relVelAlongNormal = (a.vx - b.vx) * normalDir;
 
-            if (approachingH) {
-                const newVxA = ((a.mass - b.mass) * a.vx + 2 * b.mass * b.vx) / totalMass;
-                const newVxB = ((b.mass - a.mass) * b.vx + 2 * a.mass * a.vx) / totalMass;
-                a.vx = newVxA * this.collisionDamping;
-                b.vx = newVxB * this.collisionDamping;
+            // Only resolve if approaching
+            if (relVelAlongNormal > 0) {
+                // Impulse magnitude
+                const j = -(1 + this.collisionDamping) * relVelAlongNormal / (1/a.mass + 1/b.mass);
+
+                // Apply impulse
+                a.vx += (j / a.mass) * normalDir;
+                b.vx -= (j / b.mass) * normalDir;
+
+                // For horizontal collisions, standard physics is fine (pushing feels natural)
             }
         } else {
+            // Separate vertically
             if (info.aAboveB) {
                 a.y -= info.overlapY * aRatio;
                 b.y += info.overlapY * bRatio;
@@ -86,14 +95,30 @@ class PhysicsEngine {
                 b.y -= info.overlapY * bRatio;
             }
 
-            const relVy = a.vy - b.vy;
-            const approachingV = info.aAboveB ? relVy > 0 : relVy < 0;
+            // Calculate relative velocity along collision normal
+            const normalDir = info.aAboveB ? 1 : -1;
+            const relVelAlongNormal = (a.vy - b.vy) * normalDir;
 
-            if (approachingV) {
-                const newVyA = ((a.mass - b.mass) * a.vy + 2 * b.mass * b.vy) / totalMass;
-                const newVyB = ((b.mass - a.mass) * b.vy + 2 * a.mass * a.vy) / totalMass;
-                a.vy = newVyA * this.collisionDamping;
-                b.vy = newVyB * this.collisionDamping;
+            // Only resolve if approaching
+            if (relVelAlongNormal > 0) {
+                // Impulse magnitude
+                const j = -(1 + this.collisionDamping) * relVelAlongNormal / (1/a.mass + 1/b.mass);
+
+                // Apply impulse
+                a.vy += (j / a.mass) * normalDir;
+                b.vy -= (j / b.mass) * normalDir;
+
+                // Ensure minimum bounce - if object isn't moving away, give it minimum bounce
+                const minBounce = relVelAlongNormal * this.minBounceRatio * this.collisionDamping;
+
+                // a should move opposite to normal (away from b)
+                if (a.vy * normalDir >= 0) {
+                    a.vy = -minBounce * normalDir;
+                }
+                // b should move along normal (away from a)
+                if (b.vy * normalDir <= 0) {
+                    b.vy = minBounce * normalDir;
+                }
             }
         }
 
@@ -320,6 +345,37 @@ runner.test('Stacked squares settle without jitter', function() {
 
     runner.assert(Math.abs(bottom.vy) < 10, `Bottom should be stable, vy=${bottom.vy}`);
     runner.assert(Math.abs(top.vy) < 10, `Top should be stable, vy=${top.vy}`);
+});
+
+// Test: Heavy vs Light bounce - both should bounce
+runner.test('Heavy (120px) drops onto Light (60px) - heavy bounces up', function() {
+    const engine = new PhysicsEngine({ collisionDamping: 0.8, gravity: 0 });
+    // Blue box (120px) - with linear mass = 120
+    const heavy = engine.addSquare({ size: 120, x: 100, y: 100, vx: 0, vy: 200 });
+    // Purple box (60px) - with linear mass = 60
+    const light = engine.addSquare({ size: 60, x: 130, y: 219, vx: 0, vy: 0 });
+
+    console.log(`\n    Before: Heavy vy=${heavy.vy}, Light vy=${light.vy}`);
+    engine.resolveCollision(heavy, light);
+    console.log(`    After:  Heavy vy=${heavy.vy.toFixed(1)}, Light vy=${light.vy.toFixed(1)}`);
+
+    // Heavy should bounce UP (negative vy) for natural feel
+    runner.assert(heavy.vy < 0, `Heavy should bounce up, but vy=${heavy.vy.toFixed(2)}`);
+});
+
+runner.test('Light (60px) drops onto Heavy (120px) - light bounces up', function() {
+    const engine = new PhysicsEngine({ collisionDamping: 0.8, gravity: 0 });
+    // Purple box (60px) - with linear mass = 60
+    const light = engine.addSquare({ size: 60, x: 130, y: 100, vx: 0, vy: 200 });
+    // Blue box (120px) - with linear mass = 120
+    const heavy = engine.addSquare({ size: 120, x: 100, y: 159, vx: 0, vy: 0 });
+
+    console.log(`\n    Before: Light vy=${light.vy}, Heavy vy=${heavy.vy}`);
+    engine.resolveCollision(light, heavy);
+    console.log(`    After:  Light vy=${light.vy.toFixed(1)}, Heavy vy=${heavy.vy.toFixed(1)}`);
+
+    // Light should bounce UP (negative vy)
+    runner.assert(light.vy < 0, `Light should bounce up, vy=${light.vy.toFixed(2)}`);
 });
 
 runner.run();
