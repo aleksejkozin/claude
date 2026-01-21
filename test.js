@@ -7,7 +7,8 @@ class PhysicsEngine {
         this.bounceDamping = config.bounceDamping ?? 0.5;
         this.collisionDamping = config.collisionDamping ?? 0.8;
         this.velocityThreshold = config.velocityThreshold ?? 5;
-        this.minBounceRatio = config.minBounceRatio ?? 0.3; // Minimum bounce as ratio of approach velocity
+        this.minBounceRatio = config.minBounceRatio ?? 0.3;
+        this.surfaceFriction = config.surfaceFriction ?? 0.8; // Friction between stacked boxes (0-1)
         this.bounds = config.bounds ?? { width: 800, height: 600 };
         this.squares = [];
     }
@@ -16,7 +17,8 @@ class PhysicsEngine {
         const square = {
             id: config.id ?? this.squares.length,
             size: config.size,
-            mass: config.size, // Linear mass for more balanced bounces
+            mass: config.size,
+            surfaceFriction: config.surfaceFriction ?? this.surfaceFriction, // Per-square friction
             x: config.x ?? 0,
             y: config.y ?? 0,
             vx: config.vx ?? 0,
@@ -158,7 +160,52 @@ class PhysicsEngine {
         if (Math.abs(square.vy) < this.velocityThreshold) square.vy = 0;
     }
 
+    // Check if square 'top' is resting on square 'bottom'
+    isRestingOn(top, bottom) {
+        // Check horizontal overlap
+        const overlapX = Math.min(top.x + top.size, bottom.x + bottom.size) - Math.max(top.x, bottom.x);
+        if (overlapX <= 0) return false;
+
+        // Check if top's bottom edge is at bottom's top edge (within tolerance)
+        const topBottom = top.y + top.size;
+        const bottomTop = bottom.y;
+        const gap = Math.abs(topBottom - bottomTop);
+
+        // Must be very close (resting) and top must be above bottom
+        return gap < 2 && top.y < bottom.y;
+    }
+
+    // Apply surface friction - transfer horizontal movement from bottom to top squares
+    applySurfaceFriction(dt) {
+        for (const bottom of this.squares) {
+            // Skip if bottom has no horizontal movement
+            if (Math.abs(bottom.vx) < 1 && !bottom.isDragged) continue;
+
+            for (const top of this.squares) {
+                if (top === bottom) continue;
+                if (top.isDragged) continue; // Don't move dragged squares
+
+                if (this.isRestingOn(top, bottom)) {
+                    // Calculate friction coefficient (use minimum of the two surfaces)
+                    const frictionCoef = Math.min(top.surfaceFriction, bottom.surfaceFriction);
+
+                    if (bottom.isDragged) {
+                        // If bottom is being dragged, directly move top with it
+                        top.vx += (bottom.vx - top.vx) * frictionCoef;
+                    } else {
+                        // Transfer some velocity from bottom to top
+                        const transfer = (bottom.vx - top.vx) * frictionCoef * dt * 10;
+                        top.vx += transfer;
+                    }
+                }
+            }
+        }
+    }
+
     step(dt) {
+        // Apply surface friction first (so dragged objects affect stacked ones)
+        this.applySurfaceFriction(dt);
+
         for (const square of this.squares) {
             if (square.isDragged) continue;
             square.vy += this.gravity * dt;
@@ -376,6 +423,69 @@ runner.test('Light (60px) drops onto Heavy (120px) - light bounces up', function
 
     // Light should bounce UP (negative vy)
     runner.assert(light.vy < 0, `Light should bounce up, vy=${light.vy.toFixed(2)}`);
+});
+
+// Test: Surface friction - dragged box carries stacked box
+runner.test('Surface friction - dragged box moves stacked box', function() {
+    const engine = new PhysicsEngine({
+        gravity: 0, // Disable gravity for this test
+        surfaceFriction: 0.8
+    });
+
+    // Bottom box (being dragged)
+    const bottom = engine.addSquare({ size: 50, x: 100, y: 100, vx: 100, vy: 0 });
+    bottom.isDragged = true;
+
+    // Top box (resting on bottom) - positioned so bottom edge touches bottom's top edge
+    const top = engine.addSquare({ size: 50, x: 100, y: 50, vx: 0, vy: 0 });
+
+    // Run a physics step
+    engine.step(1/60);
+
+    console.log(`\n    Bottom vx=${bottom.vx}, Top vx=${top.vx.toFixed(1)}`);
+
+    // Top should gain horizontal velocity from friction
+    runner.assert(top.vx > 0, `Top should move with bottom, got vx=${top.vx.toFixed(2)}`);
+});
+
+// Test: Surface friction coefficient affects transfer
+runner.test('Surface friction - low friction = less transfer', function() {
+    const engine = new PhysicsEngine({ gravity: 0 });
+
+    // Bottom box with low friction surface
+    const bottom = engine.addSquare({ size: 50, x: 100, y: 100, vx: 100, vy: 0, surfaceFriction: 0.2 });
+    bottom.isDragged = true;
+
+    // Top box resting on bottom
+    const top = engine.addSquare({ size: 50, x: 100, y: 50, vx: 0, vy: 0, surfaceFriction: 0.8 });
+
+    engine.step(1/60);
+
+    // Top should move less with low friction (uses min of both surfaces)
+    runner.assert(top.vx > 0 && top.vx < 50, `Top should move slowly with low friction, got vx=${top.vx.toFixed(2)}`);
+});
+
+// Test: isRestingOn detection
+runner.test('isRestingOn - detects stacked squares', function() {
+    const engine = new PhysicsEngine();
+
+    // Bottom box
+    const bottom = engine.addSquare({ size: 50, x: 100, y: 100 });
+
+    // Top box resting on bottom (y + size = bottom.y)
+    const top = engine.addSquare({ size: 50, x: 100, y: 50 });
+
+    runner.assert(engine.isRestingOn(top, bottom), 'Top should be detected as resting on bottom');
+});
+
+// Test: isRestingOn - not resting when separated
+runner.test('isRestingOn - not resting when separated', function() {
+    const engine = new PhysicsEngine();
+
+    const bottom = engine.addSquare({ size: 50, x: 100, y: 100 });
+    const top = engine.addSquare({ size: 50, x: 100, y: 40 }); // Gap between them
+
+    runner.assert(!engine.isRestingOn(top, bottom), 'Should not be resting when there is a gap');
 });
 
 runner.run();
