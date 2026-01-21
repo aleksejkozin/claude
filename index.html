@@ -30,306 +30,612 @@
         .square:active {
             cursor: grabbing;
         }
+
+        #test-results {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 9999;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+
+        .test-pass { color: green; }
+        .test-fail { color: red; }
     </style>
 </head>
 <body>
+    <div id="test-results"></div>
+
     <script>
-        // Square configurations
-        const squareConfigs = [
-            { size: 120, color: '#0066cc' },
-            { size: 80, color: '#cc3300' },
-            { size: 100, color: '#339933' },
-            { size: 60, color: '#9933cc' },
-            { size: 90, color: '#ff9900' },
-        ];
-
-        // Physics constants
-        const gravity = 800;
-        const friction = 0.92;
-        const bounceDamping = 0.5;
-        const collisionDamping = 0.7;
-        const velocityThreshold = 5;
-
-        // All squares
-        const squares = [];
-
-        // Drag state
-        let draggedSquare = null;
-        let dragOffsetX = 0;
-        let dragOffsetY = 0;
-        let lastMouseX = 0;
-        let lastMouseY = 0;
-        let lastTime = 0;
-
-        // Create squares
-        function createSquares() {
-            squareConfigs.forEach((config, index) => {
-                const element = document.createElement('div');
-                element.className = 'square';
-                element.style.width = config.size + 'px';
-                element.style.height = config.size + 'px';
-                element.style.backgroundColor = config.color;
-                document.body.appendChild(element);
-
-                const square = {
-                    element: element,
-                    size: config.size,
-                    mass: config.size * config.size,
-                    x: 100 + index * 130,
-                    y: 50 + index * 80,
-                    vx: 0,
-                    vy: 0
-                };
-
-                squares.push(square);
-                updateSquarePosition(square);
-
-                // Mouse events
-                element.addEventListener('mousedown', (e) => onMouseDown(e, square));
-
-                // Touch events
-                element.addEventListener('touchstart', (e) => onTouchStart(e, square), { passive: false });
-            });
+    // ========================================
+    // PHYSICS ENGINE (Decoupled from rendering)
+    // ========================================
+    class PhysicsEngine {
+        constructor(config = {}) {
+            this.gravity = config.gravity ?? 800;
+            this.friction = config.friction ?? 0.92;
+            this.bounceDamping = config.bounceDamping ?? 0.5;
+            this.collisionDamping = config.collisionDamping ?? 0.8;
+            this.velocityThreshold = config.velocityThreshold ?? 5;
+            this.bounds = config.bounds ?? { width: 800, height: 600 };
+            this.squares = [];
         }
 
-        function updateSquarePosition(square) {
-            square.element.style.left = square.x + 'px';
-            square.element.style.top = square.y + 'px';
+        addSquare(config) {
+            const square = {
+                id: config.id ?? this.squares.length,
+                size: config.size,
+                mass: config.size * config.size,
+                x: config.x ?? 0,
+                y: config.y ?? 0,
+                vx: config.vx ?? 0,
+                vy: config.vy ?? 0,
+                isDragged: false
+            };
+            this.squares.push(square);
+            return square;
         }
 
-        // Constrain to screen boundaries
-        function constrainToBounds(square) {
-            const maxX = window.innerWidth - square.size;
-            const maxY = window.innerHeight - square.size;
-
-            if (square.x < 0) {
-                square.x = 0;
-                square.vx = -square.vx * bounceDamping;
-                if (Math.abs(square.vx) < velocityThreshold) square.vx = 0;
-            } else if (square.x > maxX) {
-                square.x = maxX;
-                square.vx = -square.vx * bounceDamping;
-                if (Math.abs(square.vx) < velocityThreshold) square.vx = 0;
-            }
-
-            if (square.y < 0) {
-                square.y = 0;
-                square.vy = -square.vy * bounceDamping;
-                if (Math.abs(square.vy) < velocityThreshold) square.vy = 0;
-            } else if (square.y > maxY) {
-                square.y = maxY;
-                square.vy = -square.vy * bounceDamping;
-                if (Math.abs(square.vy) < velocityThreshold) square.vy = 0;
-            }
+        setBounds(width, height) {
+            this.bounds = { width, height };
         }
 
-        // Check collision between two squares (AABB)
-        function checkCollision(a, b) {
+        // Check AABB collision between two squares
+        checkCollision(a, b) {
             return a.x < b.x + b.size &&
                    a.x + a.size > b.x &&
                    a.y < b.y + b.size &&
                    a.y + a.size > b.y;
         }
 
-        // Resolve collision between two squares
-        function resolveCollision(a, b) {
-            // Calculate overlap on each axis
+        // Get collision info (overlap amounts and direction)
+        getCollisionInfo(a, b) {
             const overlapX = Math.min(a.x + a.size - b.x, b.x + b.size - a.x);
             const overlapY = Math.min(a.y + a.size - b.y, b.y + b.size - a.y);
 
+            // Determine primary collision axis
+            const isHorizontal = overlapX < overlapY;
+
+            return {
+                overlapX,
+                overlapY,
+                isHorizontal,
+                // Relative position: is 'a' to the left/above 'b'?
+                aLeftOfB: a.x + a.size / 2 < b.x + b.size / 2,
+                aAboveB: a.y + a.size / 2 < b.y + b.size / 2
+            };
+        }
+
+        // Resolve collision between two squares
+        resolveCollision(a, b) {
+            if (!this.checkCollision(a, b)) return false;
+
+            const info = this.getCollisionInfo(a, b);
             const totalMass = a.mass + b.mass;
             const aRatio = b.mass / totalMass;
             const bRatio = a.mass / totalMass;
 
-            // Determine collision axis (smallest overlap)
-            if (overlapX < overlapY) {
-                // Horizontal collision - fully separate
-                if (a.x < b.x) {
-                    a.x -= overlapX * aRatio;
-                    b.x += overlapX * bRatio;
+            if (info.isHorizontal) {
+                // Separate horizontally
+                if (info.aLeftOfB) {
+                    a.x -= info.overlapX * aRatio;
+                    b.x += info.overlapX * bRatio;
                 } else {
-                    a.x += overlapX * aRatio;
-                    b.x -= overlapX * bRatio;
+                    a.x += info.overlapX * aRatio;
+                    b.x -= info.overlapX * bRatio;
                 }
 
-                // Only exchange velocities if moving toward each other
-                const relativeVx = a.vx - b.vx;
-                if ((a.x < b.x && relativeVx > 0) || (a.x > b.x && relativeVx < 0)) {
+                // Calculate relative velocity
+                const relVx = a.vx - b.vx;
+                const approachingH = info.aLeftOfB ? relVx > 0 : relVx < 0;
+
+                if (approachingH) {
+                    // 1D elastic collision formula
                     const newVxA = ((a.mass - b.mass) * a.vx + 2 * b.mass * b.vx) / totalMass;
                     const newVxB = ((b.mass - a.mass) * b.vx + 2 * a.mass * a.vx) / totalMass;
-                    a.vx = newVxA * collisionDamping;
-                    b.vx = newVxB * collisionDamping;
+                    a.vx = newVxA * this.collisionDamping;
+                    b.vx = newVxB * this.collisionDamping;
                 }
             } else {
-                // Vertical collision - fully separate
-                if (a.y < b.y) {
-                    a.y -= overlapY * aRatio;
-                    b.y += overlapY * bRatio;
+                // Separate vertically
+                if (info.aAboveB) {
+                    a.y -= info.overlapY * aRatio;
+                    b.y += info.overlapY * bRatio;
                 } else {
-                    a.y += overlapY * aRatio;
-                    b.y -= overlapY * bRatio;
+                    a.y += info.overlapY * aRatio;
+                    b.y -= info.overlapY * bRatio;
                 }
 
-                // Only exchange velocities if moving toward each other
-                const relativeVy = a.vy - b.vy;
-                if ((a.y < b.y && relativeVy > 0) || (a.y > b.y && relativeVy < 0)) {
+                // Calculate relative velocity
+                const relVy = a.vy - b.vy;
+                const approachingV = info.aAboveB ? relVy > 0 : relVy < 0;
+
+                if (approachingV) {
+                    // 1D elastic collision formula
                     const newVyA = ((a.mass - b.mass) * a.vy + 2 * b.mass * b.vy) / totalMass;
                     const newVyB = ((b.mass - a.mass) * b.vy + 2 * a.mass * a.vy) / totalMass;
-                    a.vy = newVyA * collisionDamping;
-                    b.vy = newVyB * collisionDamping;
+                    a.vy = newVyA * this.collisionDamping;
+                    b.vy = newVyB * this.collisionDamping;
                 }
             }
+
+            return true;
         }
 
-        // Physics update loop
-        let lastFrameTime = performance.now();
+        // Constrain square to bounds
+        constrainToBounds(square) {
+            const maxX = this.bounds.width - square.size;
+            const maxY = this.bounds.height - square.size;
+            let hitBoundary = false;
 
-        function physicsLoop(currentTime) {
-            const dt = Math.min((currentTime - lastFrameTime) / 1000, 0.05);
-            lastFrameTime = currentTime;
+            if (square.x < 0) {
+                square.x = 0;
+                square.vx = -square.vx * this.bounceDamping;
+                hitBoundary = true;
+            } else if (square.x > maxX) {
+                square.x = maxX;
+                square.vx = -square.vx * this.bounceDamping;
+                hitBoundary = true;
+            }
 
-            // Update each square
-            squares.forEach(square => {
-                if (square !== draggedSquare) {
-                    // Apply gravity
-                    square.vy += gravity * dt;
+            if (square.y < 0) {
+                square.y = 0;
+                square.vy = -square.vy * this.bounceDamping;
+                hitBoundary = true;
+            } else if (square.y > maxY) {
+                square.y = maxY;
+                square.vy = -square.vy * this.bounceDamping;
+                hitBoundary = true;
+            }
 
-                    // Apply friction (more on horizontal for ground feel)
-                    square.vx *= friction;
+            return hitBoundary;
+        }
 
-                    // Update position
-                    square.x += square.vx * dt;
-                    square.y += square.vy * dt;
+        // Apply velocity threshold (stop tiny movements)
+        applyVelocityThreshold(square) {
+            if (Math.abs(square.vx) < this.velocityThreshold) square.vx = 0;
+            if (Math.abs(square.vy) < this.velocityThreshold) square.vy = 0;
+        }
 
-                    // Zero out tiny velocities to prevent jitter
-                    if (Math.abs(square.vx) < velocityThreshold) square.vx = 0;
-                    if (Math.abs(square.vy) < velocityThreshold && square.vy > 0) square.vy = 0;
-                }
+        // Single physics step
+        step(dt) {
+            // Update velocities and positions
+            for (const square of this.squares) {
+                if (square.isDragged) continue;
 
-                // Constrain to bounds
-                constrainToBounds(square);
-            });
+                // Apply gravity
+                square.vy += this.gravity * dt;
 
-            // Run multiple collision iterations to stabilize stacking
-            for (let iter = 0; iter < 3; iter++) {
-                for (let i = 0; i < squares.length; i++) {
-                    for (let j = i + 1; j < squares.length; j++) {
-                        if (checkCollision(squares[i], squares[j])) {
-                            resolveCollision(squares[i], squares[j]);
-                        }
+                // Apply friction to horizontal movement
+                square.vx *= this.friction;
+
+                // Update position
+                square.x += square.vx * dt;
+                square.y += square.vy * dt;
+            }
+
+            // Constrain to bounds
+            for (const square of this.squares) {
+                this.constrainToBounds(square);
+            }
+
+            // Resolve collisions (multiple iterations for stability)
+            for (let iter = 0; iter < 4; iter++) {
+                for (let i = 0; i < this.squares.length; i++) {
+                    for (let j = i + 1; j < this.squares.length; j++) {
+                        this.resolveCollision(this.squares[i], this.squares[j]);
                     }
                 }
             }
 
-            // Final bounds check after collision resolution
-            squares.forEach(constrainToBounds);
-
-            // Update DOM
-            squares.forEach(updateSquarePosition);
-
-            requestAnimationFrame(physicsLoop);
-        }
-
-        // Mouse events
-        function onMouseDown(e, square) {
-            draggedSquare = square;
-            dragOffsetX = e.clientX - square.x;
-            dragOffsetY = e.clientY - square.y;
-            lastMouseX = e.clientX;
-            lastMouseY = e.clientY;
-            lastTime = performance.now();
-            square.vx = 0;
-            square.vy = 0;
-
-            // Bring to front
-            square.element.style.zIndex = Date.now();
-        }
-
-        function onMouseMove(e) {
-            if (!draggedSquare) return;
-
-            const currentTime = performance.now();
-            const dt = (currentTime - lastTime) / 1000;
-
-            if (dt > 0) {
-                draggedSquare.vx = (e.clientX - lastMouseX) / dt;
-                draggedSquare.vy = (e.clientY - lastMouseY) / dt;
+            // Final bounds check
+            for (const square of this.squares) {
+                this.constrainToBounds(square);
+                this.applyVelocityThreshold(square);
             }
+        }
+    }
 
-            draggedSquare.x = e.clientX - dragOffsetX;
-            draggedSquare.y = e.clientY - dragOffsetY;
-
-            constrainToBounds(draggedSquare);
-            updateSquarePosition(draggedSquare);
-
-            lastMouseX = e.clientX;
-            lastMouseY = e.clientY;
-            lastTime = currentTime;
+    // ========================================
+    // UNIT TESTS
+    // ========================================
+    class TestRunner {
+        constructor() {
+            this.tests = [];
+            this.passed = 0;
+            this.failed = 0;
+            this.results = [];
         }
 
-        function onMouseUp() {
-            draggedSquare = null;
+        test(name, fn) {
+            this.tests.push({ name, fn });
         }
 
-        // Touch events
-        function onTouchStart(e, square) {
-            e.preventDefault();
-            const touch = e.touches[0];
-            draggedSquare = square;
-            dragOffsetX = touch.clientX - square.x;
-            dragOffsetY = touch.clientY - square.y;
-            lastMouseX = touch.clientX;
-            lastMouseY = touch.clientY;
-            lastTime = performance.now();
-            square.vx = 0;
-            square.vy = 0;
-
-            square.element.style.zIndex = Date.now();
-        }
-
-        function onTouchMove(e) {
-            if (!draggedSquare) return;
-            e.preventDefault();
-
-            const touch = e.touches[0];
-            const currentTime = performance.now();
-            const dt = (currentTime - lastTime) / 1000;
-
-            if (dt > 0) {
-                draggedSquare.vx = (touch.clientX - lastMouseX) / dt;
-                draggedSquare.vy = (touch.clientY - lastMouseY) / dt;
+        assert(condition, message) {
+            if (!condition) {
+                throw new Error(message || 'Assertion failed');
             }
-
-            draggedSquare.x = touch.clientX - dragOffsetX;
-            draggedSquare.y = touch.clientY - dragOffsetY;
-
-            constrainToBounds(draggedSquare);
-            updateSquarePosition(draggedSquare);
-
-            lastMouseX = touch.clientX;
-            lastMouseY = touch.clientY;
-            lastTime = currentTime;
         }
 
-        function onTouchEnd() {
-            draggedSquare = null;
+        assertApprox(actual, expected, tolerance, message) {
+            if (Math.abs(actual - expected) > tolerance) {
+                throw new Error(message || `Expected ${expected} ± ${tolerance}, got ${actual}`);
+            }
         }
 
-        // Global event listeners
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
-        document.addEventListener('touchmove', onTouchMove, { passive: false });
-        document.addEventListener('touchend', onTouchEnd);
+        run() {
+            for (const { name, fn } of this.tests) {
+                try {
+                    fn();
+                    this.passed++;
+                    this.results.push({ name, passed: true });
+                } catch (e) {
+                    this.failed++;
+                    this.results.push({ name, passed: false, error: e.message });
+                }
+            }
+            return this;
+        }
 
-        // Handle window resize
-        window.addEventListener('resize', () => {
-            squares.forEach(constrainToBounds);
-            squares.forEach(updateSquarePosition);
+        getResults() {
+            return {
+                passed: this.passed,
+                failed: this.failed,
+                total: this.tests.length,
+                results: this.results
+            };
+        }
+    }
+
+    function runPhysicsTests() {
+        const runner = new TestRunner();
+
+        // Test: Gravity increases vertical velocity
+        runner.test('Gravity increases vy', function() {
+            const engine = new PhysicsEngine({ gravity: 100 });
+            const sq = engine.addSquare({ size: 50, x: 100, y: 100, vx: 0, vy: 0 });
+            engine.step(0.1);
+            runner.assert(sq.vy > 0, `vy should increase, got ${sq.vy}`);
         });
 
-        // Initialize
-        createSquares();
-        requestAnimationFrame(physicsLoop);
+        // Test: Friction reduces horizontal velocity
+        runner.test('Friction reduces vx', function() {
+            const engine = new PhysicsEngine({ friction: 0.9, gravity: 0 });
+            const sq = engine.addSquare({ size: 50, x: 100, y: 100, vx: 100, vy: 0 });
+            const initialVx = sq.vx;
+            engine.step(0.1);
+            runner.assert(Math.abs(sq.vx) < Math.abs(initialVx), `vx should decrease`);
+        });
+
+        // Test: Square stops at bottom boundary
+        runner.test('Bottom boundary stops square', function() {
+            const engine = new PhysicsEngine({ bounds: { width: 800, height: 600 } });
+            const sq = engine.addSquare({ size: 50, x: 100, y: 600, vy: 100 });
+            engine.step(0.1);
+            runner.assertApprox(sq.y, 550, 1, 'Square should be at bottom');
+        });
+
+        // Test: Square stops at right boundary
+        runner.test('Right boundary stops square', function() {
+            const engine = new PhysicsEngine({ gravity: 0, bounds: { width: 800, height: 600 } });
+            const sq = engine.addSquare({ size: 50, x: 800, y: 100, vx: 100 });
+            engine.step(0.1);
+            runner.assertApprox(sq.x, 750, 1, 'Square should be at right edge');
+        });
+
+        // Test: Collision detection works
+        runner.test('Collision detection - overlapping', function() {
+            const engine = new PhysicsEngine();
+            const a = engine.addSquare({ size: 50, x: 100, y: 100 });
+            const b = engine.addSquare({ size: 50, x: 120, y: 100 });
+            runner.assert(engine.checkCollision(a, b), 'Squares should collide');
+        });
+
+        // Test: Collision detection - not overlapping
+        runner.test('Collision detection - separate', function() {
+            const engine = new PhysicsEngine();
+            const a = engine.addSquare({ size: 50, x: 100, y: 100 });
+            const b = engine.addSquare({ size: 50, x: 200, y: 100 });
+            runner.assert(!engine.checkCollision(a, b), 'Squares should not collide');
+        });
+
+        // Test: Collision separates squares
+        runner.test('Collision separates overlapping squares', function() {
+            const engine = new PhysicsEngine();
+            const a = engine.addSquare({ size: 50, x: 100, y: 100, vx: 0, vy: 0 });
+            const b = engine.addSquare({ size: 50, x: 120, y: 100, vx: 0, vy: 0 });
+            engine.resolveCollision(a, b);
+            runner.assert(!engine.checkCollision(a, b), 'Squares should be separated after resolution');
+        });
+
+        // Test: Head-on collision exchanges velocity
+        runner.test('Head-on collision - equal mass velocity exchange', function() {
+            const engine = new PhysicsEngine({ collisionDamping: 1.0 });
+            const a = engine.addSquare({ size: 50, x: 100, y: 100, vx: 100, vy: 0 });
+            const b = engine.addSquare({ size: 50, x: 149, y: 100, vx: -100, vy: 0 });
+
+            engine.resolveCollision(a, b);
+
+            // Equal mass: velocities should swap (approximately, with some damping)
+            runner.assert(a.vx < 0, `a.vx should be negative after collision, got ${a.vx}`);
+            runner.assert(b.vx > 0, `b.vx should be positive after collision, got ${b.vx}`);
+        });
+
+        // Test: Stationary square gets pushed by moving square
+        runner.test('Moving square transfers momentum to stationary', function() {
+            const engine = new PhysicsEngine({ collisionDamping: 1.0 });
+            const a = engine.addSquare({ size: 50, x: 100, y: 100, vx: 100, vy: 0 });
+            const b = engine.addSquare({ size: 50, x: 149, y: 100, vx: 0, vy: 0 });
+
+            engine.resolveCollision(a, b);
+
+            runner.assert(b.vx > 0, `Stationary square should gain velocity, got ${b.vx}`);
+        });
+
+        // Test: Vertical collision (dropping square onto another)
+        runner.test('Vertical collision - dropping square bounces', function() {
+            const engine = new PhysicsEngine({ collisionDamping: 1.0, gravity: 0 });
+            const a = engine.addSquare({ size: 50, x: 100, y: 100, vx: 0, vy: 100 }); // falling
+            const b = engine.addSquare({ size: 50, x: 100, y: 149, vx: 0, vy: 0 });   // stationary
+
+            engine.resolveCollision(a, b);
+
+            runner.assert(a.vy < 50, `Falling square should slow/reverse, got ${a.vy}`);
+            runner.assert(b.vy > 0, `Bottom square should gain downward velocity, got ${b.vy}`);
+        });
+
+        // Test: Heavy square pushes light square more
+        runner.test('Heavy square pushes light square more', function() {
+            const engine = new PhysicsEngine({ collisionDamping: 1.0 });
+            const heavy = engine.addSquare({ size: 100, x: 100, y: 100, vx: 50, vy: 0 });
+            const light = engine.addSquare({ size: 50, x: 199, y: 125, vx: 0, vy: 0 });
+
+            const heavyInitialVx = heavy.vx;
+            engine.resolveCollision(heavy, light);
+
+            // Heavy square should barely slow down, light square should move fast
+            runner.assert(heavy.vx > 0, 'Heavy square should still move right');
+            runner.assert(light.vx > heavyInitialVx * 0.5, `Light square should move fast, got ${light.vx}`);
+        });
+
+        // Test: Stacking doesn't cause jitter (velocity stays near zero)
+        runner.test('Stacked squares settle without jitter', function() {
+            const engine = new PhysicsEngine({
+                gravity: 800,
+                bounds: { width: 800, height: 600 },
+                velocityThreshold: 5
+            });
+            const bottom = engine.addSquare({ size: 50, x: 100, y: 550, vx: 0, vy: 0 });
+            const top = engine.addSquare({ size: 50, x: 100, y: 500, vx: 0, vy: 0 });
+
+            // Simulate several frames
+            for (let i = 0; i < 60; i++) {
+                engine.step(1/60);
+            }
+
+            // Both should be nearly stationary
+            runner.assert(Math.abs(bottom.vy) < 10, `Bottom should be stable, vy=${bottom.vy}`);
+            runner.assert(Math.abs(top.vy) < 10, `Top should be stable, vy=${top.vy}`);
+        });
+
+        return runner.run().getResults();
+    }
+
+    // ========================================
+    // VISUALIZATION (Browser rendering)
+    // ========================================
+    class Renderer {
+        constructor(engine) {
+            this.engine = engine;
+            this.elements = new Map();
+            this.draggedSquare = null;
+            this.dragOffset = { x: 0, y: 0 };
+            this.lastMouse = { x: 0, y: 0 };
+            this.lastTime = 0;
+        }
+
+        createSquareElement(square, color) {
+            const el = document.createElement('div');
+            el.className = 'square';
+            el.style.width = square.size + 'px';
+            el.style.height = square.size + 'px';
+            el.style.backgroundColor = color;
+            document.body.appendChild(el);
+
+            this.elements.set(square.id, el);
+
+            el.addEventListener('mousedown', (e) => this.onMouseDown(e, square));
+            el.addEventListener('touchstart', (e) => this.onTouchStart(e, square), { passive: false });
+
+            return el;
+        }
+
+        updatePositions() {
+            for (const square of this.engine.squares) {
+                const el = this.elements.get(square.id);
+                if (el) {
+                    el.style.left = square.x + 'px';
+                    el.style.top = square.y + 'px';
+                }
+            }
+        }
+
+        onMouseDown(e, square) {
+            this.draggedSquare = square;
+            square.isDragged = true;
+            this.dragOffset.x = e.clientX - square.x;
+            this.dragOffset.y = e.clientY - square.y;
+            this.lastMouse.x = e.clientX;
+            this.lastMouse.y = e.clientY;
+            this.lastTime = performance.now();
+            square.vx = 0;
+            square.vy = 0;
+            this.elements.get(square.id).style.zIndex = Date.now();
+        }
+
+        onMouseMove(e) {
+            if (!this.draggedSquare) return;
+
+            const square = this.draggedSquare;
+            const now = performance.now();
+            const dt = (now - this.lastTime) / 1000;
+
+            if (dt > 0) {
+                square.vx = (e.clientX - this.lastMouse.x) / dt;
+                square.vy = (e.clientY - this.lastMouse.y) / dt;
+            }
+
+            square.x = e.clientX - this.dragOffset.x;
+            square.y = e.clientY - this.dragOffset.y;
+
+            this.engine.constrainToBounds(square);
+
+            this.lastMouse.x = e.clientX;
+            this.lastMouse.y = e.clientY;
+            this.lastTime = now;
+        }
+
+        onMouseUp() {
+            if (this.draggedSquare) {
+                this.draggedSquare.isDragged = false;
+                this.draggedSquare = null;
+            }
+        }
+
+        onTouchStart(e, square) {
+            e.preventDefault();
+            const touch = e.touches[0];
+            this.draggedSquare = square;
+            square.isDragged = true;
+            this.dragOffset.x = touch.clientX - square.x;
+            this.dragOffset.y = touch.clientY - square.y;
+            this.lastMouse.x = touch.clientX;
+            this.lastMouse.y = touch.clientY;
+            this.lastTime = performance.now();
+            square.vx = 0;
+            square.vy = 0;
+            this.elements.get(square.id).style.zIndex = Date.now();
+        }
+
+        onTouchMove(e) {
+            if (!this.draggedSquare) return;
+            e.preventDefault();
+
+            const touch = e.touches[0];
+            const square = this.draggedSquare;
+            const now = performance.now();
+            const dt = (now - this.lastTime) / 1000;
+
+            if (dt > 0) {
+                square.vx = (touch.clientX - this.lastMouse.x) / dt;
+                square.vy = (touch.clientY - this.lastMouse.y) / dt;
+            }
+
+            square.x = touch.clientX - this.dragOffset.x;
+            square.y = touch.clientY - this.dragOffset.y;
+
+            this.engine.constrainToBounds(square);
+
+            this.lastMouse.x = touch.clientX;
+            this.lastMouse.y = touch.clientY;
+            this.lastTime = now;
+        }
+
+        onTouchEnd() {
+            if (this.draggedSquare) {
+                this.draggedSquare.isDragged = false;
+                this.draggedSquare = null;
+            }
+        }
+
+        setupEventListeners() {
+            document.addEventListener('mousemove', (e) => this.onMouseMove(e));
+            document.addEventListener('mouseup', () => this.onMouseUp());
+            document.addEventListener('touchmove', (e) => this.onTouchMove(e), { passive: false });
+            document.addEventListener('touchend', () => this.onTouchEnd());
+
+            window.addEventListener('resize', () => {
+                this.engine.setBounds(window.innerWidth, window.innerHeight);
+            });
+        }
+    }
+
+    // ========================================
+    // MAIN - Run tests then start app
+    // ========================================
+
+    // Run tests first
+    const testResults = runPhysicsTests();
+
+    // Display test results
+    const resultsDiv = document.getElementById('test-results');
+    let html = `<strong>Tests: ${testResults.passed}/${testResults.total} passed</strong><br><br>`;
+    for (const result of testResults.results) {
+        if (result.passed) {
+            html += `<span class="test-pass">✓ ${result.name}</span><br>`;
+        } else {
+            html += `<span class="test-fail">✗ ${result.name}<br>&nbsp;&nbsp;${result.error}</span><br>`;
+        }
+    }
+    resultsDiv.innerHTML = html;
+
+    // Auto-hide test results after 5 seconds if all passed
+    if (testResults.failed === 0) {
+        setTimeout(() => {
+            resultsDiv.style.display = 'none';
+        }, 5000);
+    }
+
+    // Initialize physics engine
+    const engine = new PhysicsEngine({
+        gravity: 800,
+        friction: 0.92,
+        bounceDamping: 0.5,
+        collisionDamping: 0.8,
+        velocityThreshold: 5,
+        bounds: { width: window.innerWidth, height: window.innerHeight }
+    });
+
+    // Square configurations
+    const squareConfigs = [
+        { size: 120, color: '#0066cc', x: 100, y: 50 },
+        { size: 80, color: '#cc3300', x: 250, y: 100 },
+        { size: 100, color: '#339933', x: 400, y: 80 },
+        { size: 60, color: '#9933cc', x: 550, y: 120 },
+        { size: 90, color: '#ff9900', x: 650, y: 60 },
+    ];
+
+    // Create renderer
+    const renderer = new Renderer(engine);
+    renderer.setupEventListeners();
+
+    // Add squares to engine and create visual elements
+    for (const config of squareConfigs) {
+        const square = engine.addSquare(config);
+        renderer.createSquareElement(square, config.color);
+    }
+
+    // Animation loop
+    let lastFrameTime = performance.now();
+
+    function gameLoop(currentTime) {
+        const dt = Math.min((currentTime - lastFrameTime) / 1000, 0.05);
+        lastFrameTime = currentTime;
+
+        engine.step(dt);
+        renderer.updatePositions();
+
+        requestAnimationFrame(gameLoop);
+    }
+
+    requestAnimationFrame(gameLoop);
     </script>
 </body>
 </html>
