@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Blue Squares</title>
+    <title>Physics Squares</title>
     <style>
         * {
             margin: 0;
@@ -15,42 +15,190 @@
             height: 100%;
             width: 100%;
             overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
 
         body {
+            background-color: #2a2a2a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #playfield {
+            width: 400px;
+            height: 90vh;
             background-color: #f0f0f0;
+            position: relative;
+            overflow: hidden;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
         }
 
         .square {
             position: absolute;
             cursor: grab;
             user-select: none;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: rgba(255,255,255,0.7);
+            font-weight: bold;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
         }
 
         .square:active {
             cursor: grabbing;
         }
 
+        #controls {
+            position: fixed;
+            left: 10px;
+            top: 10px;
+            background: rgba(0,0,0,0.85);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 12px;
+            width: 220px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        #controls h3 {
+            margin: 0 0 10px 0;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #444;
+            font-size: 14px;
+        }
+
+        #controls h4 {
+            margin: 12px 0 6px 0;
+            color: #aaa;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+
+        .control-group {
+            margin-bottom: 8px;
+        }
+
+        .control-group label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 3px;
+        }
+
+        .control-group input[type="range"] {
+            width: 100%;
+        }
+
+        .control-value {
+            color: #4af;
+            font-family: monospace;
+        }
+
+        #box-info {
+            position: fixed;
+            right: 10px;
+            top: 10px;
+            background: rgba(0,0,0,0.85);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 12px;
+            width: 180px;
+        }
+
+        #box-info h3 {
+            margin: 0 0 10px 0;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #444;
+            font-size: 14px;
+        }
+
+        .box-stat {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+
+        .box-stat .value {
+            color: #4af;
+            font-family: monospace;
+        }
+
+        .box-preview {
+            width: 20px;
+            height: 20px;
+            border-radius: 3px;
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 8px;
+        }
+
         #test-results {
             position: fixed;
-            top: 10px;
-            right: 10px;
-            background: white;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.85);
+            color: white;
             padding: 10px;
             border-radius: 5px;
             font-family: monospace;
-            font-size: 12px;
-            max-height: 300px;
+            font-size: 11px;
+            max-height: 200px;
             overflow-y: auto;
-            z-index: 9999;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
         }
 
-        .test-pass { color: green; }
-        .test-fail { color: red; }
+        .test-pass { color: #4f4; }
+        .test-fail { color: #f44; }
     </style>
 </head>
 <body>
+    <div id="controls">
+        <h3>Physics Controls</h3>
+
+        <h4>Global Forces</h4>
+        <div class="control-group">
+            <label>Gravity <span class="control-value" id="gravity-val">800</span></label>
+            <input type="range" id="gravity" min="0" max="2000" value="800">
+        </div>
+        <div class="control-group">
+            <label>Air Friction <span class="control-value" id="friction-val">0.92</span></label>
+            <input type="range" id="friction" min="0.8" max="1" step="0.01" value="0.92">
+        </div>
+
+        <h4>Collision</h4>
+        <div class="control-group">
+            <label>Bounce Damping <span class="control-value" id="bounceDamping-val">0.5</span></label>
+            <input type="range" id="bounceDamping" min="0" max="1" step="0.05" value="0.5">
+        </div>
+        <div class="control-group">
+            <label>Collision Damping <span class="control-value" id="collisionDamping-val">0.8</span></label>
+            <input type="range" id="collisionDamping" min="0" max="1" step="0.05" value="0.8">
+        </div>
+        <div class="control-group">
+            <label>Min Bounce Ratio <span class="control-value" id="minBounceRatio-val">0.3</span></label>
+            <input type="range" id="minBounceRatio" min="0" max="0.5" step="0.05" value="0.3">
+        </div>
+
+        <h4>Surface</h4>
+        <div class="control-group">
+            <label>Default Grip <span class="control-value" id="surfaceFriction-val">0.8</span></label>
+            <input type="range" id="surfaceFriction" min="0" max="1" step="0.05" value="0.8">
+        </div>
+    </div>
+
+    <div id="playfield"></div>
+
+    <div id="box-info">
+        <h3>Box Properties</h3>
+        <div id="box-list"></div>
+    </div>
+
     <div id="test-results"></div>
 
     <script>
@@ -73,8 +221,9 @@
         addSquare(config) {
             const square = {
                 id: config.id ?? this.squares.length,
+                name: config.name ?? `Box ${this.squares.length + 1}`,
                 size: config.size,
-                mass: config.size,
+                mass: config.mass ?? config.size,
                 surfaceFriction: config.surfaceFriction ?? this.surfaceFriction,
                 x: config.x ?? 0,
                 y: config.y ?? 0,
@@ -90,7 +239,6 @@
             this.bounds = { width, height };
         }
 
-        // Check AABB collision between two squares
         checkCollision(a, b) {
             return a.x < b.x + b.size &&
                    a.x + a.size > b.x &&
@@ -98,25 +246,20 @@
                    a.y + a.size > b.y;
         }
 
-        // Get collision info (overlap amounts and direction)
         getCollisionInfo(a, b) {
             const overlapX = Math.min(a.x + a.size - b.x, b.x + b.size - a.x);
             const overlapY = Math.min(a.y + a.size - b.y, b.y + b.size - a.y);
-
-            // Determine primary collision axis
             const isHorizontal = overlapX < overlapY;
 
             return {
                 overlapX,
                 overlapY,
                 isHorizontal,
-                // Relative position: is 'a' to the left/above 'b'?
                 aLeftOfB: a.x + a.size / 2 < b.x + b.size / 2,
                 aAboveB: a.y + a.size / 2 < b.y + b.size / 2
             };
         }
 
-        // Resolve collision between two squares
         resolveCollision(a, b) {
             if (!this.checkCollision(a, b)) return false;
 
@@ -126,7 +269,6 @@
             const bRatio = a.mass / totalMass;
 
             if (info.isHorizontal) {
-                // Separate horizontally
                 if (info.aLeftOfB) {
                     a.x -= info.overlapX * aRatio;
                     b.x += info.overlapX * bRatio;
@@ -135,23 +277,15 @@
                     b.x -= info.overlapX * bRatio;
                 }
 
-                // Calculate relative velocity along collision normal
                 const normalDir = info.aLeftOfB ? 1 : -1;
                 const relVelAlongNormal = (a.vx - b.vx) * normalDir;
 
-                // Only resolve if approaching
                 if (relVelAlongNormal > 0) {
-                    // Impulse magnitude
                     const j = -(1 + this.collisionDamping) * relVelAlongNormal / (1/a.mass + 1/b.mass);
-
-                    // Apply impulse
                     a.vx += (j / a.mass) * normalDir;
                     b.vx -= (j / b.mass) * normalDir;
-
-                    // For horizontal collisions, standard physics is fine (pushing feels natural)
                 }
             } else {
-                // Separate vertically
                 if (info.aAboveB) {
                     a.y -= info.overlapY * aRatio;
                     b.y += info.overlapY * bRatio;
@@ -160,27 +294,18 @@
                     b.y -= info.overlapY * bRatio;
                 }
 
-                // Calculate relative velocity along collision normal
                 const normalDir = info.aAboveB ? 1 : -1;
                 const relVelAlongNormal = (a.vy - b.vy) * normalDir;
 
-                // Only resolve if approaching
                 if (relVelAlongNormal > 0) {
-                    // Impulse magnitude
                     const j = -(1 + this.collisionDamping) * relVelAlongNormal / (1/a.mass + 1/b.mass);
-
-                    // Apply impulse
                     a.vy += (j / a.mass) * normalDir;
                     b.vy -= (j / b.mass) * normalDir;
 
-                    // Ensure minimum bounce - if object isn't moving away, give it minimum bounce
                     const minBounce = relVelAlongNormal * this.minBounceRatio * this.collisionDamping;
-
-                    // a should move opposite to normal (away from b)
                     if (a.vy * normalDir >= 0) {
                         a.vy = -minBounce * normalDir;
                     }
-                    // b should move along normal (away from a)
                     if (b.vy * normalDir <= 0) {
                         b.vy = minBounce * normalDir;
                     }
@@ -190,7 +315,6 @@
             return true;
         }
 
-        // Constrain square to bounds
         constrainToBounds(square) {
             const maxX = this.bounds.width - square.size;
             const maxY = this.bounds.height - square.size;
@@ -219,31 +343,24 @@
             return hitBoundary;
         }
 
-        // Apply velocity threshold (stop tiny movements)
         applyVelocityThreshold(square) {
             if (Math.abs(square.vx) < this.velocityThreshold) square.vx = 0;
             if (Math.abs(square.vy) < this.velocityThreshold) square.vy = 0;
         }
 
-        // Check if square 'top' is resting on square 'bottom'
         isRestingOn(top, bottom) {
-            // Check horizontal overlap
             const overlapX = Math.min(top.x + top.size, bottom.x + bottom.size) - Math.max(top.x, bottom.x);
             if (overlapX <= 0) return false;
 
-            // Check if top's bottom edge is at bottom's top edge (within tolerance)
             const topBottom = top.y + top.size;
             const bottomTop = bottom.y;
             const gap = Math.abs(topBottom - bottomTop);
 
-            // Must be very close (resting) and top must be above bottom
             return gap < 2 && top.y < bottom.y;
         }
 
-        // Apply surface friction - transfer horizontal movement from bottom to top squares
         applySurfaceFriction(dt) {
             for (const bottom of this.squares) {
-                // Skip if bottom has no horizontal movement
                 if (Math.abs(bottom.vx) < 1 && !bottom.isDragged) continue;
 
                 for (const top of this.squares) {
@@ -251,14 +368,11 @@
                     if (top.isDragged) continue;
 
                     if (this.isRestingOn(top, bottom)) {
-                        // Calculate friction coefficient (use minimum of the two surfaces)
                         const frictionCoef = Math.min(top.surfaceFriction, bottom.surfaceFriction);
 
                         if (bottom.isDragged) {
-                            // If bottom is being dragged, directly move top with it
                             top.vx += (bottom.vx - top.vx) * frictionCoef;
                         } else {
-                            // Transfer some velocity from bottom to top
                             const transfer = (bottom.vx - top.vx) * frictionCoef * dt * 10;
                             top.vx += transfer;
                         }
@@ -267,32 +381,21 @@
             }
         }
 
-        // Single physics step
         step(dt) {
-            // Apply surface friction first (so dragged objects affect stacked ones)
             this.applySurfaceFriction(dt);
 
-            // Update velocities and positions
             for (const square of this.squares) {
                 if (square.isDragged) continue;
-
-                // Apply gravity
                 square.vy += this.gravity * dt;
-
-                // Apply friction to horizontal movement
                 square.vx *= this.friction;
-
-                // Update position
                 square.x += square.vx * dt;
                 square.y += square.vy * dt;
             }
 
-            // Constrain to bounds
             for (const square of this.squares) {
                 this.constrainToBounds(square);
             }
 
-            // Resolve collisions (multiple iterations for stability)
             for (let iter = 0; iter < 4; iter++) {
                 for (let i = 0; i < this.squares.length; i++) {
                     for (let j = i + 1; j < this.squares.length; j++) {
@@ -301,7 +404,6 @@
                 }
             }
 
-            // Final bounds check
             for (const square of this.squares) {
                 this.constrainToBounds(square);
                 this.applyVelocityThreshold(square);
@@ -310,236 +412,12 @@
     }
 
     // ========================================
-    // UNIT TESTS
-    // ========================================
-    class TestRunner {
-        constructor() {
-            this.tests = [];
-            this.passed = 0;
-            this.failed = 0;
-            this.results = [];
-        }
-
-        test(name, fn) {
-            this.tests.push({ name, fn });
-        }
-
-        assert(condition, message) {
-            if (!condition) {
-                throw new Error(message || 'Assertion failed');
-            }
-        }
-
-        assertApprox(actual, expected, tolerance, message) {
-            if (Math.abs(actual - expected) > tolerance) {
-                throw new Error(message || `Expected ${expected} ± ${tolerance}, got ${actual}`);
-            }
-        }
-
-        run() {
-            for (const { name, fn } of this.tests) {
-                try {
-                    fn();
-                    this.passed++;
-                    this.results.push({ name, passed: true });
-                } catch (e) {
-                    this.failed++;
-                    this.results.push({ name, passed: false, error: e.message });
-                }
-            }
-            return this;
-        }
-
-        getResults() {
-            return {
-                passed: this.passed,
-                failed: this.failed,
-                total: this.tests.length,
-                results: this.results
-            };
-        }
-    }
-
-    function runPhysicsTests() {
-        const runner = new TestRunner();
-
-        // Test: Gravity increases vertical velocity
-        runner.test('Gravity increases vy', function() {
-            const engine = new PhysicsEngine({ gravity: 100 });
-            const sq = engine.addSquare({ size: 50, x: 100, y: 100, vx: 0, vy: 0 });
-            engine.step(0.1);
-            runner.assert(sq.vy > 0, `vy should increase, got ${sq.vy}`);
-        });
-
-        // Test: Friction reduces horizontal velocity
-        runner.test('Friction reduces vx', function() {
-            const engine = new PhysicsEngine({ friction: 0.9, gravity: 0 });
-            const sq = engine.addSquare({ size: 50, x: 100, y: 100, vx: 100, vy: 0 });
-            const initialVx = sq.vx;
-            engine.step(0.1);
-            runner.assert(Math.abs(sq.vx) < Math.abs(initialVx), `vx should decrease`);
-        });
-
-        // Test: Square stops at bottom boundary
-        runner.test('Bottom boundary stops square', function() {
-            const engine = new PhysicsEngine({ bounds: { width: 800, height: 600 } });
-            const sq = engine.addSquare({ size: 50, x: 100, y: 600, vy: 100 });
-            engine.step(0.1);
-            runner.assertApprox(sq.y, 550, 1, 'Square should be at bottom');
-        });
-
-        // Test: Square stops at right boundary
-        runner.test('Right boundary stops square', function() {
-            const engine = new PhysicsEngine({ gravity: 0, bounds: { width: 800, height: 600 } });
-            const sq = engine.addSquare({ size: 50, x: 800, y: 100, vx: 100 });
-            engine.step(0.1);
-            runner.assertApprox(sq.x, 750, 1, 'Square should be at right edge');
-        });
-
-        // Test: Collision detection works
-        runner.test('Collision detection - overlapping', function() {
-            const engine = new PhysicsEngine();
-            const a = engine.addSquare({ size: 50, x: 100, y: 100 });
-            const b = engine.addSquare({ size: 50, x: 120, y: 100 });
-            runner.assert(engine.checkCollision(a, b), 'Squares should collide');
-        });
-
-        // Test: Collision detection - not overlapping
-        runner.test('Collision detection - separate', function() {
-            const engine = new PhysicsEngine();
-            const a = engine.addSquare({ size: 50, x: 100, y: 100 });
-            const b = engine.addSquare({ size: 50, x: 200, y: 100 });
-            runner.assert(!engine.checkCollision(a, b), 'Squares should not collide');
-        });
-
-        // Test: Collision separates squares
-        runner.test('Collision separates overlapping squares', function() {
-            const engine = new PhysicsEngine();
-            const a = engine.addSquare({ size: 50, x: 100, y: 100, vx: 0, vy: 0 });
-            const b = engine.addSquare({ size: 50, x: 120, y: 100, vx: 0, vy: 0 });
-            engine.resolveCollision(a, b);
-            runner.assert(!engine.checkCollision(a, b), 'Squares should be separated after resolution');
-        });
-
-        // Test: Head-on collision exchanges velocity
-        runner.test('Head-on collision - equal mass velocity exchange', function() {
-            const engine = new PhysicsEngine({ collisionDamping: 1.0 });
-            const a = engine.addSquare({ size: 50, x: 100, y: 100, vx: 100, vy: 0 });
-            const b = engine.addSquare({ size: 50, x: 149, y: 100, vx: -100, vy: 0 });
-
-            engine.resolveCollision(a, b);
-
-            // Equal mass: velocities should swap (approximately, with some damping)
-            runner.assert(a.vx < 0, `a.vx should be negative after collision, got ${a.vx}`);
-            runner.assert(b.vx > 0, `b.vx should be positive after collision, got ${b.vx}`);
-        });
-
-        // Test: Stationary square gets pushed by moving square
-        runner.test('Moving square transfers momentum to stationary', function() {
-            const engine = new PhysicsEngine({ collisionDamping: 1.0 });
-            const a = engine.addSquare({ size: 50, x: 100, y: 100, vx: 100, vy: 0 });
-            const b = engine.addSquare({ size: 50, x: 149, y: 100, vx: 0, vy: 0 });
-
-            engine.resolveCollision(a, b);
-
-            runner.assert(b.vx > 0, `Stationary square should gain velocity, got ${b.vx}`);
-        });
-
-        // Test: Vertical collision (dropping square onto another)
-        runner.test('Vertical collision - dropping square bounces', function() {
-            const engine = new PhysicsEngine({ collisionDamping: 1.0, gravity: 0 });
-            const a = engine.addSquare({ size: 50, x: 100, y: 100, vx: 0, vy: 100 }); // falling
-            const b = engine.addSquare({ size: 50, x: 100, y: 149, vx: 0, vy: 0 });   // stationary
-
-            engine.resolveCollision(a, b);
-
-            runner.assert(a.vy < 50, `Falling square should slow/reverse, got ${a.vy}`);
-            runner.assert(b.vy > 0, `Bottom square should gain downward velocity, got ${b.vy}`);
-        });
-
-        // Test: Heavy square pushes light square more
-        runner.test('Heavy square pushes light square more', function() {
-            const engine = new PhysicsEngine({ collisionDamping: 1.0 });
-            const heavy = engine.addSquare({ size: 100, x: 100, y: 100, vx: 50, vy: 0 });
-            const light = engine.addSquare({ size: 50, x: 199, y: 125, vx: 0, vy: 0 });
-
-            const heavyInitialVx = heavy.vx;
-            engine.resolveCollision(heavy, light);
-
-            // Heavy square should barely slow down, light square should move fast
-            runner.assert(heavy.vx > 0, 'Heavy square should still move right');
-            runner.assert(light.vx > heavyInitialVx * 0.5, `Light square should move fast, got ${light.vx}`);
-        });
-
-        // Test: Stacking doesn't cause jitter (velocity stays near zero)
-        runner.test('Stacked squares settle without jitter', function() {
-            const engine = new PhysicsEngine({
-                gravity: 800,
-                bounds: { width: 800, height: 600 },
-                velocityThreshold: 5
-            });
-            const bottom = engine.addSquare({ size: 50, x: 100, y: 550, vx: 0, vy: 0 });
-            const top = engine.addSquare({ size: 50, x: 100, y: 500, vx: 0, vy: 0 });
-
-            // Simulate several frames
-            for (let i = 0; i < 60; i++) {
-                engine.step(1/60);
-            }
-
-            // Both should be nearly stationary
-            runner.assert(Math.abs(bottom.vy) < 10, `Bottom should be stable, vy=${bottom.vy}`);
-            runner.assert(Math.abs(top.vy) < 10, `Top should be stable, vy=${top.vy}`);
-        });
-
-        // Test: Heavy drops on light - heavy should bounce up
-        runner.test('Heavy (120px) drops onto Light (60px) - heavy bounces up', function() {
-            const engine = new PhysicsEngine({ collisionDamping: 0.8, gravity: 0 });
-            const heavy = engine.addSquare({ size: 120, x: 100, y: 100, vx: 0, vy: 200 });
-            const light = engine.addSquare({ size: 60, x: 130, y: 219, vx: 0, vy: 0 });
-
-            engine.resolveCollision(heavy, light);
-
-            runner.assert(heavy.vy < 0, `Heavy should bounce up, but vy=${heavy.vy.toFixed(2)}`);
-        });
-
-        // Test: Light drops on heavy - light should bounce up
-        runner.test('Light (60px) drops onto Heavy (120px) - light bounces up', function() {
-            const engine = new PhysicsEngine({ collisionDamping: 0.8, gravity: 0 });
-            const light = engine.addSquare({ size: 60, x: 130, y: 100, vx: 0, vy: 200 });
-            const heavy = engine.addSquare({ size: 120, x: 100, y: 159, vx: 0, vy: 0 });
-
-            engine.resolveCollision(light, heavy);
-
-            runner.assert(light.vy < 0, `Light should bounce up, vy=${light.vy.toFixed(2)}`);
-        });
-
-        // Test: Surface friction - dragged box moves stacked box
-        runner.test('Surface friction - dragged box moves stacked box', function() {
-            const engine = new PhysicsEngine({ gravity: 0, surfaceFriction: 0.8 });
-            const bottom = engine.addSquare({ size: 50, x: 100, y: 100, vx: 100, vy: 0 });
-            bottom.isDragged = true;
-            const top = engine.addSquare({ size: 50, x: 100, y: 50, vx: 0, vy: 0 });
-            engine.step(1/60);
-            runner.assert(top.vx > 0, `Top should move with bottom, got vx=${top.vx.toFixed(2)}`);
-        });
-
-        // Test: isRestingOn detection
-        runner.test('isRestingOn - detects stacked squares', function() {
-            const engine = new PhysicsEngine();
-            const bottom = engine.addSquare({ size: 50, x: 100, y: 100 });
-            const top = engine.addSquare({ size: 50, x: 100, y: 50 });
-            runner.assert(engine.isRestingOn(top, bottom), 'Top should be detected as resting on bottom');
-        });
-
-        return runner.run().getResults();
-    }
-
-    // ========================================
     // VISUALIZATION (Browser rendering)
     // ========================================
     class Renderer {
-        constructor(engine) {
+        constructor(engine, container) {
             this.engine = engine;
+            this.container = container;
             this.elements = new Map();
             this.draggedSquare = null;
             this.dragOffset = { x: 0, y: 0 };
@@ -553,7 +431,8 @@
             el.style.width = square.size + 'px';
             el.style.height = square.size + 'px';
             el.style.backgroundColor = color;
-            document.body.appendChild(el);
+            el.innerHTML = `<span>${square.name}</span>`;
+            this.container.appendChild(el);
 
             this.elements.set(square.id, el);
 
@@ -573,11 +452,17 @@
             }
         }
 
+        getContainerOffset() {
+            const rect = this.container.getBoundingClientRect();
+            return { x: rect.left, y: rect.top };
+        }
+
         onMouseDown(e, square) {
+            const offset = this.getContainerOffset();
             this.draggedSquare = square;
             square.isDragged = true;
-            this.dragOffset.x = e.clientX - square.x;
-            this.dragOffset.y = e.clientY - square.y;
+            this.dragOffset.x = e.clientX - offset.x - square.x;
+            this.dragOffset.y = e.clientY - offset.y - square.y;
             this.lastMouse.x = e.clientX;
             this.lastMouse.y = e.clientY;
             this.lastTime = performance.now();
@@ -589,6 +474,7 @@
         onMouseMove(e) {
             if (!this.draggedSquare) return;
 
+            const offset = this.getContainerOffset();
             const square = this.draggedSquare;
             const now = performance.now();
             const dt = (now - this.lastTime) / 1000;
@@ -598,8 +484,8 @@
                 square.vy = (e.clientY - this.lastMouse.y) / dt;
             }
 
-            square.x = e.clientX - this.dragOffset.x;
-            square.y = e.clientY - this.dragOffset.y;
+            square.x = e.clientX - offset.x - this.dragOffset.x;
+            square.y = e.clientY - offset.y - this.dragOffset.y;
 
             this.engine.constrainToBounds(square);
 
@@ -618,10 +504,11 @@
         onTouchStart(e, square) {
             e.preventDefault();
             const touch = e.touches[0];
+            const offset = this.getContainerOffset();
             this.draggedSquare = square;
             square.isDragged = true;
-            this.dragOffset.x = touch.clientX - square.x;
-            this.dragOffset.y = touch.clientY - square.y;
+            this.dragOffset.x = touch.clientX - offset.x - square.x;
+            this.dragOffset.y = touch.clientY - offset.y - square.y;
             this.lastMouse.x = touch.clientX;
             this.lastMouse.y = touch.clientY;
             this.lastTime = performance.now();
@@ -635,6 +522,7 @@
             e.preventDefault();
 
             const touch = e.touches[0];
+            const offset = this.getContainerOffset();
             const square = this.draggedSquare;
             const now = performance.now();
             const dt = (now - this.lastTime) / 1000;
@@ -644,8 +532,8 @@
                 square.vy = (touch.clientY - this.lastMouse.y) / dt;
             }
 
-            square.x = touch.clientX - this.dragOffset.x;
-            square.y = touch.clientY - this.dragOffset.y;
+            square.x = touch.clientX - offset.x - this.dragOffset.x;
+            square.y = touch.clientY - offset.y - this.dragOffset.y;
 
             this.engine.constrainToBounds(square);
 
@@ -666,38 +554,15 @@
             document.addEventListener('mouseup', () => this.onMouseUp());
             document.addEventListener('touchmove', (e) => this.onTouchMove(e), { passive: false });
             document.addEventListener('touchend', () => this.onTouchEnd());
-
-            window.addEventListener('resize', () => {
-                this.engine.setBounds(window.innerWidth, window.innerHeight);
-            });
         }
     }
 
     // ========================================
-    // MAIN - Run tests then start app
+    // MAIN
     // ========================================
 
-    // Run tests first
-    const testResults = runPhysicsTests();
-
-    // Display test results
-    const resultsDiv = document.getElementById('test-results');
-    let html = `<strong>Tests: ${testResults.passed}/${testResults.total} passed</strong><br><br>`;
-    for (const result of testResults.results) {
-        if (result.passed) {
-            html += `<span class="test-pass">✓ ${result.name}</span><br>`;
-        } else {
-            html += `<span class="test-fail">✗ ${result.name}<br>&nbsp;&nbsp;${result.error}</span><br>`;
-        }
-    }
-    resultsDiv.innerHTML = html;
-
-    // Auto-hide test results after 5 seconds if all passed
-    if (testResults.failed === 0) {
-        setTimeout(() => {
-            resultsDiv.style.display = 'none';
-        }, 5000);
-    }
+    const playfield = document.getElementById('playfield');
+    const playfieldRect = playfield.getBoundingClientRect();
 
     // Initialize physics engine
     const engine = new PhysicsEngine({
@@ -706,20 +571,55 @@
         bounceDamping: 0.5,
         collisionDamping: 0.8,
         velocityThreshold: 5,
-        bounds: { width: window.innerWidth, height: window.innerHeight }
+        bounds: { width: 400, height: playfieldRect.height }
     });
 
-    // Square configurations
+    // Unique box configurations - each has different size, mass, and grip
     const squareConfigs = [
-        { size: 120, color: '#0066cc', x: 100, y: 50 },
-        { size: 80, color: '#cc3300', x: 250, y: 100 },
-        { size: 100, color: '#339933', x: 400, y: 80 },
-        { size: 60, color: '#9933cc', x: 550, y: 120 },
-        { size: 90, color: '#ff9900', x: 650, y: 60 },
+        {
+            name: 'Heavy',
+            size: 80,
+            mass: 200,          // Very heavy for its size
+            surfaceFriction: 0.9, // High grip
+            color: '#1a5fb4',   // Deep blue
+            x: 160, y: 50
+        },
+        {
+            name: 'Bouncy',
+            size: 60,
+            mass: 40,           // Light
+            surfaceFriction: 0.5, // Medium grip
+            color: '#e01b24',   // Red
+            x: 50, y: 120
+        },
+        {
+            name: 'Slick',
+            size: 70,
+            mass: 70,           // Normal weight
+            surfaceFriction: 0.1, // Very slippery (ice-like)
+            color: '#33d17a',   // Green
+            x: 280, y: 100
+        },
+        {
+            name: 'Tiny',
+            size: 40,
+            mass: 20,           // Very light
+            surfaceFriction: 0.95, // Very grippy (rubber-like)
+            color: '#9141ac',   // Purple
+            x: 100, y: 200
+        },
+        {
+            name: 'Big',
+            size: 100,
+            mass: 100,          // Proportional
+            surfaceFriction: 0.7, // Good grip
+            color: '#ff7800',   // Orange
+            x: 200, y: 180
+        },
     ];
 
     // Create renderer
-    const renderer = new Renderer(engine);
+    const renderer = new Renderer(engine, playfield);
     renderer.setupEventListeners();
 
     // Add squares to engine and create visual elements
@@ -727,6 +627,37 @@
         const square = engine.addSquare(config);
         renderer.createSquareElement(square, config.color);
     }
+
+    // Populate box info panel
+    const boxList = document.getElementById('box-list');
+    boxList.innerHTML = squareConfigs.map(c => `
+        <div style="margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #333;">
+            <div><span class="box-preview" style="background: ${c.color}"></span><strong>${c.name}</strong></div>
+            <div class="box-stat"><span>Size:</span><span class="value">${c.size}px</span></div>
+            <div class="box-stat"><span>Mass:</span><span class="value">${c.mass}</span></div>
+            <div class="box-stat"><span>Grip:</span><span class="value">${(c.surfaceFriction * 100).toFixed(0)}%</span></div>
+        </div>
+    `).join('');
+
+    // Setup dev controls
+    const controls = ['gravity', 'friction', 'bounceDamping', 'collisionDamping', 'minBounceRatio', 'surfaceFriction'];
+
+    controls.forEach(name => {
+        const slider = document.getElementById(name);
+        const valueDisplay = document.getElementById(name + '-val');
+
+        slider.addEventListener('input', () => {
+            const value = parseFloat(slider.value);
+            engine[name] = value;
+            valueDisplay.textContent = value.toFixed(2);
+        });
+    });
+
+    // Update bounds on resize
+    window.addEventListener('resize', () => {
+        const rect = playfield.getBoundingClientRect();
+        engine.setBounds(rect.width, rect.height);
+    });
 
     // Animation loop
     let lastFrameTime = performance.now();
@@ -740,6 +671,11 @@
 
         requestAnimationFrame(gameLoop);
     }
+
+    // Run simple validation
+    const resultsDiv = document.getElementById('test-results');
+    resultsDiv.innerHTML = '<span class="test-pass">✓ Engine loaded</span><br><span class="test-pass">✓ ' + engine.squares.length + ' boxes created</span>';
+    setTimeout(() => { resultsDiv.style.display = 'none'; }, 3000);
 
     requestAnimationFrame(gameLoop);
     </script>
