@@ -8,18 +8,19 @@ RUN apt-get update && apt-get install -y \
 
 # Create a non-root user for security
 RUN useradd -m -s /bin/bash developer
+
+# Switch to developer to install Claude Code in their home
 USER developer
 WORKDIR /home/developer
 
-# Add future Claude bin to PATH
-ENV PATH="/home/developer/.claude/bin:${PATH}"
+# Install Claude Code using official installer (uses Pro plan auth)
+RUN curl -fsSL https://claude.ai/install.sh | bash
 
-# Copy entrypoint script
-COPY --chown=developer:developer entrypoint.sh /home/developer/entrypoint.sh
-RUN chmod +x /home/developer/entrypoint.sh
+# Add Claude to PATH
+ENV PATH="/home/developer/.claude/bin:${PATH}"
 
 # Set working directory (will be mounted)
 WORKDIR /workspace
 
-ENTRYPOINT ["/home/developer/entrypoint.sh"]
+# Default command
 CMD ["claude"]
