@@ -19,15 +19,13 @@ import {
   exportTemplates,
   saveBlockTemplate
 } from '../engine/world.js';
-import { createRenderer, drawWorld, drawDevUI } from '../renderer/canvas.js';
+import { createRenderer, drawWorld } from '../renderer/canvas.js';
 
 let world;
 let renderer;
 let lastTime = 0;
 let mouseX = 0;
 let mouseY = 0;
-let previewBlock = null;
-let isRunning = true;
 
 // DOM elements
 let canvas;
@@ -147,15 +145,15 @@ function setupControlEvents() {
 }
 
 function getFormValues() {
+  const surface = controls.querySelector('#block-surface').value;
   return {
     width: parseFloat(controls.querySelector('#block-width').value) || 50,
     height: parseFloat(controls.querySelector('#block-height').value) || 50,
     mass: parseFloat(controls.querySelector('#block-mass').value) || 1,
     friction: parseFloat(controls.querySelector('#block-friction').value) || 0.5,
     bounciness: parseFloat(controls.querySelector('#block-bounciness').value) || 0.2,
-    sticky: controls.querySelector('#block-sticky').checked,
-    slippery: controls.querySelector('#block-slippery').checked,
-    shape: controls.querySelector('#block-shape').value,
+    sticky: surface === 'sticky',
+    slippery: surface === 'slippery',
   };
 }
 
@@ -165,9 +163,11 @@ function setFormValues(values) {
   controls.querySelector('#block-mass').value = values.mass;
   controls.querySelector('#block-friction').value = values.friction;
   controls.querySelector('#block-bounciness').value = values.bounciness;
-  controls.querySelector('#block-sticky').checked = values.sticky;
-  controls.querySelector('#block-slippery').checked = values.slippery;
-  controls.querySelector('#block-shape').value = values.shape;
+
+  let surface = 'normal';
+  if (values.sticky) surface = 'sticky';
+  else if (values.slippery) surface = 'slippery';
+  controls.querySelector('#block-surface').value = surface;
 }
 
 function updateControlsFromBlock(block) {
@@ -179,7 +179,6 @@ function updateControlsFromBlock(block) {
     bounciness: block.bounciness,
     sticky: block.sticky,
     slippery: block.slippery,
-    shape: block.shape,
   });
 }
 
@@ -274,12 +273,8 @@ function onInputChange() {
       block.bounciness = values.bounciness;
       block.sticky = values.sticky;
       block.slippery = values.slippery;
-      block.shape = values.shape;
     }
   }
-
-  // Update preview block
-  previewBlock = createBlock(getFormValues());
 }
 
 function gameLoop(currentTime) {
@@ -291,11 +286,6 @@ function gameLoop(currentTime) {
 
   // Render
   drawWorld(renderer, world);
-
-  // Draw dev UI overlay
-  if (!world.draggedBlockId) {
-    drawDevUI(renderer, mouseX, mouseY, previewBlock);
-  }
 
   requestAnimationFrame(gameLoop);
 }

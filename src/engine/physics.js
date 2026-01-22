@@ -204,3 +204,51 @@ export function constrainToWorld(block, worldWidth, worldHeight) {
     block.vy = Math.abs(block.vy) * block.bounciness;
   }
 }
+
+// Check if blockOnTop is resting on blockBelow
+export function isRestingOn(blockOnTop, blockBelow) {
+  const topBounds = getBounds(blockOnTop);
+  const belowBounds = getBounds(blockBelow);
+
+  // Check vertical alignment: top block's bottom should be at or just above below block's top
+  const verticalContact = Math.abs(topBounds.bottom - belowBounds.top) < 2;
+
+  // Check horizontal overlap
+  const horizontalOverlap =
+    topBounds.right > belowBounds.left + 1 &&
+    topBounds.left < belowBounds.right - 1;
+
+  return verticalContact && horizontalOverlap;
+}
+
+// Find all blocks resting on top of a given block
+export function getBlocksRestingOn(block, allBlocks) {
+  return allBlocks.filter(other =>
+    other.id !== block.id &&
+    !other.isStatic &&
+    !other.isDragging &&
+    isRestingOn(other, block)
+  );
+}
+
+// Apply drag friction: when a block is dragged, blocks on top move with it
+export function applyDragFriction(draggedBlock, allBlocks, dx, dy, visited = new Set()) {
+  if (visited.has(draggedBlock.id)) return;
+  visited.add(draggedBlock.id);
+
+  const blocksOnTop = getBlocksRestingOn(draggedBlock, allBlocks);
+
+  for (const block of blocksOnTop) {
+    const friction = getEffectiveFriction(draggedBlock, block);
+
+    // Move block based on friction (high friction = moves more with dragged block)
+    // Sticky blocks move 100% with the dragged block
+    const moveFactor = draggedBlock.sticky || block.sticky ? 1.0 : friction;
+
+    block.x += dx * moveFactor;
+    block.y += dy;
+
+    // Recursively apply to blocks on top of this one
+    applyDragFriction(block, allBlocks, dx * moveFactor, dy, visited);
+  }
+}

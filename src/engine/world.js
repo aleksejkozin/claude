@@ -8,7 +8,8 @@ import {
   checkCollision,
   resolveCollision,
   applyDamping,
-  constrainToWorld
+  constrainToWorld,
+  applyDragFriction
 } from './physics.js';
 
 export function createWorld(width, height) {
@@ -90,8 +91,16 @@ export function updateDrag(world, mouseX, mouseY) {
   const block = getBlockById(world, world.draggedBlockId);
   if (!block) return;
 
-  block.x = mouseX - world.dragOffset.x;
-  block.y = mouseY - world.dragOffset.y;
+  const newX = mouseX - world.dragOffset.x;
+  const newY = mouseY - world.dragOffset.y;
+  const dx = newX - block.x;
+  const dy = newY - block.y;
+
+  block.x = newX;
+  block.y = newY;
+
+  // Apply friction to blocks resting on top
+  applyDragFriction(block, world.blocks, dx, dy);
 }
 
 export function endDrag(world) {

@@ -102,7 +102,7 @@ export function drawWorld(renderer, world) {
 }
 
 function drawHeightIndicator(renderer, world) {
-  const { ctx, canvas } = renderer;
+  const { ctx } = renderer;
 
   // Find highest block
   let minY = world.height;
@@ -114,16 +114,7 @@ function drawHeightIndicator(renderer, world) {
 
   const towerHeight = world.height - minY;
 
-  // Draw height line
-  ctx.strokeStyle = 'rgba(255, 255, 0, 0.5)';
-  ctx.setLineDash([5, 5]);
-  ctx.beginPath();
-  ctx.moveTo(0, minY);
-  ctx.lineTo(canvas.width, minY);
-  ctx.stroke();
-  ctx.setLineDash([]);
-
-  // Draw height text
+  // Draw height text only
   ctx.fillStyle = '#ffff00';
   ctx.font = '14px monospace';
   ctx.fillText(`Height: ${Math.floor(towerHeight)}px`, 10, 20);
@@ -147,27 +138,7 @@ function drawGround(renderer, world) {
 }
 
 export function drawDevUI(renderer, mouseX, mouseY, previewBlock) {
-  const { ctx } = renderer;
-
-  // Draw preview block at mouse position if we have one
-  if (previewBlock) {
-    ctx.globalAlpha = 0.5;
-    drawBlock(renderer, {
-      ...previewBlock,
-      x: mouseX - previewBlock.width / 2,
-      y: mouseY - previewBlock.height / 2,
-    }, false);
-    ctx.globalAlpha = 1;
-  }
-
-  // Draw crosshair at mouse
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-  ctx.beginPath();
-  ctx.moveTo(mouseX - 10, mouseY);
-  ctx.lineTo(mouseX + 10, mouseY);
-  ctx.moveTo(mouseX, mouseY - 10);
-  ctx.lineTo(mouseX, mouseY + 10);
-  ctx.stroke();
+  // No preview effects
 }
 
 export function resizeCanvas(renderer, width, height) {

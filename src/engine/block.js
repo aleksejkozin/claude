@@ -13,7 +13,6 @@ export function createBlock(options = {}) {
     bounciness: options.bounciness ?? 0.2,
     sticky: options.sticky ?? false,
     slippery: options.slippery ?? false,
-    shape: options.shape ?? 'square', // 'square', 'brick', 'tall'
 
     // Physics state
     vx: options.vx ?? 0,
@@ -106,7 +105,6 @@ export function blockToJSON(block) {
     bounciness: block.bounciness,
     sticky: block.sticky,
     slippery: block.slippery,
-    shape: block.shape,
   };
 }
 

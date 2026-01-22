@@ -32,6 +32,9 @@ import {
   resolveCollision,
   applyDamping,
   constrainToWorld,
+  isRestingOn,
+  getBlocksRestingOn,
+  applyDragFriction,
   GRAVITY,
 } from '../engine/physics.js';
 
@@ -372,6 +375,114 @@ test('step does nothing when paused', () => {
   step(world, 0.1);
   assertEqual(block.x, 100);
   assertEqual(block.vy, 0);
+});
+
+// ============ Friction Tests ============
+
+test('isRestingOn detects block resting on another', () => {
+  const bottom = createBlock({ x: 100, y: 100, width: 50, height: 50 });
+  const top = createBlock({ x: 100, y: 50, width: 50, height: 50 }); // bottom of top = 100 = top of bottom
+  assertTrue(isRestingOn(top, bottom));
+});
+
+test('isRestingOn returns false when blocks not touching vertically', () => {
+  const bottom = createBlock({ x: 100, y: 100, width: 50, height: 50 });
+  const top = createBlock({ x: 100, y: 40, width: 50, height: 50 }); // gap between them
+  assertFalse(isRestingOn(top, bottom));
+});
+
+test('isRestingOn returns false when blocks not overlapping horizontally', () => {
+  const bottom = createBlock({ x: 100, y: 100, width: 50, height: 50 });
+  const top = createBlock({ x: 200, y: 50, width: 50, height: 50 }); // different x position
+  assertFalse(isRestingOn(top, bottom));
+});
+
+test('getBlocksRestingOn finds blocks on top', () => {
+  const bottom = createBlock({ x: 100, y: 100, width: 50, height: 50 });
+  const top = createBlock({ x: 100, y: 50, width: 50, height: 50 });
+  const unrelated = createBlock({ x: 300, y: 50, width: 50, height: 50 });
+  const blocks = [bottom, top, unrelated];
+
+  const resting = getBlocksRestingOn(bottom, blocks);
+  assertEqual(resting.length, 1);
+  assertEqual(resting[0], top);
+});
+
+test('applyDragFriction moves blocks on top with high friction', () => {
+  const bottom = createBlock({ x: 100, y: 100, width: 50, height: 50, friction: 1.0 });
+  const top = createBlock({ x: 100, y: 50, width: 50, height: 50, friction: 1.0 });
+  bottom.isDragging = true;
+  const blocks = [bottom, top];
+
+  applyDragFriction(bottom, blocks, 20, 0); // drag right by 20
+
+  // With friction = 1.0, top should move fully with bottom
+  assertEqual(top.x, 120);
+});
+
+test('applyDragFriction moves blocks less with low friction', () => {
+  const bottom = createBlock({ x: 100, y: 100, width: 50, height: 50, friction: 0.5 });
+  const top = createBlock({ x: 100, y: 50, width: 50, height: 50, friction: 0.5 });
+  bottom.isDragging = true;
+  const blocks = [bottom, top];
+
+  applyDragFriction(bottom, blocks, 20, 0); // drag right by 20
+
+  // With friction = 0.5, top should move partially
+  assertTrue(top.x > 100); // moved
+  assertTrue(top.x < 120); // but not fully
+});
+
+test('applyDragFriction sticky blocks move fully with dragged block', () => {
+  const bottom = createBlock({ x: 100, y: 100, width: 50, height: 50, sticky: true });
+  const top = createBlock({ x: 100, y: 50, width: 50, height: 50, friction: 0.1 });
+  bottom.isDragging = true;
+  const blocks = [bottom, top];
+
+  applyDragFriction(bottom, blocks, 20, 0);
+
+  // Sticky bottom means top moves 100%
+  assertEqual(top.x, 120);
+});
+
+test('applyDragFriction slippery blocks have very low friction', () => {
+  const bottom = createBlock({ x: 100, y: 100, width: 50, height: 50, slippery: true, friction: 0.5 });
+  const top = createBlock({ x: 100, y: 50, width: 50, height: 50, friction: 0.5 });
+  bottom.isDragging = true;
+  const blocks = [bottom, top];
+
+  applyDragFriction(bottom, blocks, 20, 0);
+
+  // Slippery means very low effective friction
+  assertTrue(top.x < 105); // barely moved
+});
+
+test('applyDragFriction cascades to multiple levels', () => {
+  const bottom = createBlock({ x: 100, y: 150, width: 50, height: 50, friction: 1.0 });
+  const middle = createBlock({ x: 100, y: 100, width: 50, height: 50, friction: 1.0 });
+  const top = createBlock({ x: 100, y: 50, width: 50, height: 50, friction: 1.0 });
+  bottom.isDragging = true;
+  const blocks = [bottom, middle, top];
+
+  applyDragFriction(bottom, blocks, 20, 0);
+
+  // All blocks should move with full friction
+  assertEqual(middle.x, 120);
+  assertEqual(top.x, 120);
+});
+
+test('dragging block moves blocks on top via updateDrag', () => {
+  const world = createWorld(400, 600);
+  const bottom = createBlock({ x: 100, y: 100, width: 50, height: 50, friction: 1.0 });
+  const top = createBlock({ x: 100, y: 50, width: 50, height: 50, friction: 1.0 });
+  addBlock(world, bottom);
+  addBlock(world, top);
+
+  startDrag(world, bottom.id, 125, 125); // center of bottom block
+  updateDrag(world, 145, 125); // move 20 pixels right
+
+  assertEqual(bottom.x, 120); // moved 20 right
+  assertEqual(top.x, 120); // should also move 20 right with high friction
 });
 
 console.log('\\n=== All tests complete ===');
