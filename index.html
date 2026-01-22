@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Physics Squares</title>
+    <title>Physics Playground</title>
     <style>
         * {
             margin: 0;
@@ -26,7 +26,7 @@
         }
 
         #playfield {
-            width: 400px;
+            width: 800px;
             height: 90vh;
             background-color: #f0f0f0;
             position: relative;
@@ -35,7 +35,7 @@
             box-shadow: 0 4px 20px rgba(0,0,0,0.5);
         }
 
-        .square {
+        .shape {
             position: absolute;
             cursor: grab;
             user-select: none;
@@ -43,13 +43,15 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 10px;
-            color: rgba(255,255,255,0.7);
+            font-size: 9px;
+            color: rgba(255,255,255,0.8);
             font-weight: bold;
-            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+            text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+            text-align: center;
+            line-height: 1.1;
         }
 
-        .square:active {
+        .shape:active {
             cursor: grabbing;
         }
 
@@ -100,7 +102,7 @@
             font-family: monospace;
         }
 
-        #box-info {
+        #shape-info {
             position: fixed;
             right: 10px;
             top: 10px;
@@ -108,35 +110,51 @@
             color: white;
             padding: 15px;
             border-radius: 8px;
-            font-size: 12px;
-            width: 180px;
+            font-size: 11px;
+            width: 200px;
+            max-height: 90vh;
+            overflow-y: auto;
         }
 
-        #box-info h3 {
+        #shape-info h3 {
             margin: 0 0 10px 0;
             padding-bottom: 8px;
             border-bottom: 1px solid #444;
             font-size: 14px;
         }
 
-        .box-stat {
+        .shape-item {
+            margin-bottom: 8px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #333;
+        }
+
+        .shape-item:last-child {
+            border-bottom: none;
+        }
+
+        .shape-header {
             display: flex;
-            justify-content: space-between;
+            align-items: center;
             margin-bottom: 4px;
         }
 
-        .box-stat .value {
-            color: #4af;
-            font-family: monospace;
+        .shape-preview {
+            border-radius: 2px;
+            display: inline-block;
+            margin-right: 8px;
         }
 
-        .box-preview {
-            width: 20px;
-            height: 20px;
-            border-radius: 3px;
-            display: inline-block;
-            vertical-align: middle;
-            margin-right: 8px;
+        .shape-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2px;
+            font-size: 10px;
+            color: #888;
+        }
+
+        .shape-stats span {
+            color: #4af;
         }
 
         #test-results {
@@ -149,8 +167,6 @@
             border-radius: 5px;
             font-family: monospace;
             font-size: 11px;
-            max-height: 200px;
-            overflow-y: auto;
         }
 
         .test-pass { color: #4f4; }
@@ -163,8 +179,8 @@
 
         <h4>Global Forces</h4>
         <div class="control-group">
-            <label>Gravity <span class="control-value" id="gravity-val">800</span></label>
-            <input type="range" id="gravity" min="0" max="2000" value="800">
+            <label>Gravity <span class="control-value" id="gravity-val">1600</span></label>
+            <input type="range" id="gravity" min="0" max="3200" value="1600">
         </div>
         <div class="control-group">
             <label>Air Friction <span class="control-value" id="friction-val">0.92</span></label>
@@ -187,23 +203,23 @@
 
         <h4>Surface</h4>
         <div class="control-group">
-            <label>Default Grip <span class="control-value" id="surfaceFriction-val">0.8</span></label>
-            <input type="range" id="surfaceFriction" min="0" max="1" step="0.05" value="0.8">
+            <label>Default Grip <span class="control-value" id="surfaceFriction-val">1.00</span></label>
+            <input type="range" id="surfaceFriction" min="0" max="1" step="0.05" value="1.0">
         </div>
     </div>
 
     <div id="playfield"></div>
 
-    <div id="box-info">
-        <h3>Box Properties</h3>
-        <div id="box-list"></div>
+    <div id="shape-info">
+        <h3>Shapes</h3>
+        <div id="shape-list"></div>
     </div>
 
     <div id="test-results"></div>
 
     <script>
     // ========================================
-    // PHYSICS ENGINE (Decoupled from rendering)
+    // PHYSICS ENGINE (Supports rectangles)
     // ========================================
     class PhysicsEngine {
         constructor(config = {}) {
@@ -213,17 +229,18 @@
             this.collisionDamping = config.collisionDamping ?? 0.8;
             this.velocityThreshold = config.velocityThreshold ?? 5;
             this.minBounceRatio = config.minBounceRatio ?? 0.3;
-            this.surfaceFriction = config.surfaceFriction ?? 0.8;
+            this.surfaceFriction = config.surfaceFriction ?? 1.0;
             this.bounds = config.bounds ?? { width: 800, height: 600 };
-            this.squares = [];
+            this.bodies = [];
         }
 
-        addSquare(config) {
-            const square = {
-                id: config.id ?? this.squares.length,
-                name: config.name ?? `Box ${this.squares.length + 1}`,
-                size: config.size,
-                mass: config.mass ?? config.size,
+        addBody(config) {
+            const body = {
+                id: config.id ?? this.bodies.length,
+                name: config.name ?? `Shape ${this.bodies.length + 1}`,
+                width: config.width ?? config.size ?? 50,
+                height: config.height ?? config.size ?? 50,
+                mass: config.mass ?? (config.width ?? config.size ?? 50) * (config.height ?? config.size ?? 50) / 50,
                 surfaceFriction: config.surfaceFriction ?? this.surfaceFriction,
                 x: config.x ?? 0,
                 y: config.y ?? 0,
@@ -231,8 +248,8 @@
                 vy: config.vy ?? 0,
                 isDragged: false
             };
-            this.squares.push(square);
-            return square;
+            this.bodies.push(body);
+            return body;
         }
 
         setBounds(width, height) {
@@ -240,23 +257,23 @@
         }
 
         checkCollision(a, b) {
-            return a.x < b.x + b.size &&
-                   a.x + a.size > b.x &&
-                   a.y < b.y + b.size &&
-                   a.y + a.size > b.y;
+            return a.x < b.x + b.width &&
+                   a.x + a.width > b.x &&
+                   a.y < b.y + b.height &&
+                   a.y + a.height > b.y;
         }
 
         getCollisionInfo(a, b) {
-            const overlapX = Math.min(a.x + a.size - b.x, b.x + b.size - a.x);
-            const overlapY = Math.min(a.y + a.size - b.y, b.y + b.size - a.y);
+            const overlapX = Math.min(a.x + a.width - b.x, b.x + b.width - a.x);
+            const overlapY = Math.min(a.y + a.height - b.y, b.y + b.height - a.y);
             const isHorizontal = overlapX < overlapY;
 
             return {
                 overlapX,
                 overlapY,
                 isHorizontal,
-                aLeftOfB: a.x + a.size / 2 < b.x + b.size / 2,
-                aAboveB: a.y + a.size / 2 < b.y + b.size / 2
+                aLeftOfB: a.x + a.width / 2 < b.x + b.width / 2,
+                aAboveB: a.y + a.height / 2 < b.y + b.height / 2
             };
         }
 
@@ -315,44 +332,44 @@
             return true;
         }
 
-        constrainToBounds(square) {
-            const maxX = this.bounds.width - square.size;
-            const maxY = this.bounds.height - square.size;
+        constrainToBounds(body) {
+            const maxX = this.bounds.width - body.width;
+            const maxY = this.bounds.height - body.height;
             let hitBoundary = false;
 
-            if (square.x < 0) {
-                square.x = 0;
-                square.vx = -square.vx * this.bounceDamping;
+            if (body.x < 0) {
+                body.x = 0;
+                body.vx = -body.vx * this.bounceDamping;
                 hitBoundary = true;
-            } else if (square.x > maxX) {
-                square.x = maxX;
-                square.vx = -square.vx * this.bounceDamping;
+            } else if (body.x > maxX) {
+                body.x = maxX;
+                body.vx = -body.vx * this.bounceDamping;
                 hitBoundary = true;
             }
 
-            if (square.y < 0) {
-                square.y = 0;
-                square.vy = -square.vy * this.bounceDamping;
+            if (body.y < 0) {
+                body.y = 0;
+                body.vy = -body.vy * this.bounceDamping;
                 hitBoundary = true;
-            } else if (square.y > maxY) {
-                square.y = maxY;
-                square.vy = -square.vy * this.bounceDamping;
+            } else if (body.y > maxY) {
+                body.y = maxY;
+                body.vy = -body.vy * this.bounceDamping;
                 hitBoundary = true;
             }
 
             return hitBoundary;
         }
 
-        applyVelocityThreshold(square) {
-            if (Math.abs(square.vx) < this.velocityThreshold) square.vx = 0;
-            if (Math.abs(square.vy) < this.velocityThreshold) square.vy = 0;
+        applyVelocityThreshold(body) {
+            if (Math.abs(body.vx) < this.velocityThreshold) body.vx = 0;
+            if (Math.abs(body.vy) < this.velocityThreshold) body.vy = 0;
         }
 
         isRestingOn(top, bottom) {
-            const overlapX = Math.min(top.x + top.size, bottom.x + bottom.size) - Math.max(top.x, bottom.x);
+            const overlapX = Math.min(top.x + top.width, bottom.x + bottom.width) - Math.max(top.x, bottom.x);
             if (overlapX <= 0) return false;
 
-            const topBottom = top.y + top.size;
+            const topBottom = top.y + top.height;
             const bottomTop = bottom.y;
             const gap = Math.abs(topBottom - bottomTop);
 
@@ -360,22 +377,38 @@
         }
 
         applySurfaceFriction(dt) {
-            for (const bottom of this.squares) {
-                if (Math.abs(bottom.vx) < 1 && !bottom.isDragged) continue;
+            // When dragging, directly set velocity for resting objects (recursive)
+            const applyDragToStack = (bottom) => {
+                for (const top of this.bodies) {
+                    if (top === bottom || top.isDragged) continue;
+                    if (this.isRestingOn(top, bottom)) {
+                        const frictionCoef = Math.min(top.surfaceFriction, bottom.surfaceFriction);
+                        // Direct velocity transfer for dragged stacks
+                        top.vx = bottom.vx * frictionCoef;
+                        top.x += (bottom.x - (top.x - (top.x - bottom.x))) * 0;  // Keep position stable
+                        // Recursively apply to objects resting on top
+                        applyDragToStack(top);
+                    }
+                }
+            };
 
-                for (const top of this.squares) {
-                    if (top === bottom) continue;
-                    if (top.isDragged) continue;
+            for (const body of this.bodies) {
+                if (body.isDragged) {
+                    applyDragToStack(body);
+                }
+            }
+
+            // Normal friction transfer for non-dragged movement
+            for (const bottom of this.bodies) {
+                if (bottom.isDragged || Math.abs(bottom.vx) < 1) continue;
+
+                for (const top of this.bodies) {
+                    if (top === bottom || top.isDragged) continue;
 
                     if (this.isRestingOn(top, bottom)) {
                         const frictionCoef = Math.min(top.surfaceFriction, bottom.surfaceFriction);
-
-                        if (bottom.isDragged) {
-                            top.vx += (bottom.vx - top.vx) * frictionCoef;
-                        } else {
-                            const transfer = (bottom.vx - top.vx) * frictionCoef * dt * 10;
-                            top.vx += transfer;
-                        }
+                        const transfer = (bottom.vx - top.vx) * frictionCoef * dt * 10;
+                        top.vx += transfer;
                     }
                 }
             }
@@ -384,70 +417,70 @@
         step(dt) {
             this.applySurfaceFriction(dt);
 
-            for (const square of this.squares) {
-                if (square.isDragged) continue;
-                square.vy += this.gravity * dt;
-                square.vx *= this.friction;
-                square.x += square.vx * dt;
-                square.y += square.vy * dt;
+            for (const body of this.bodies) {
+                if (body.isDragged) continue;
+                body.vy += this.gravity * dt;
+                body.vx *= this.friction;
+                body.x += body.vx * dt;
+                body.y += body.vy * dt;
             }
 
-            for (const square of this.squares) {
-                this.constrainToBounds(square);
+            for (const body of this.bodies) {
+                this.constrainToBounds(body);
             }
 
             for (let iter = 0; iter < 4; iter++) {
-                for (let i = 0; i < this.squares.length; i++) {
-                    for (let j = i + 1; j < this.squares.length; j++) {
-                        this.resolveCollision(this.squares[i], this.squares[j]);
+                for (let i = 0; i < this.bodies.length; i++) {
+                    for (let j = i + 1; j < this.bodies.length; j++) {
+                        this.resolveCollision(this.bodies[i], this.bodies[j]);
                     }
                 }
             }
 
-            for (const square of this.squares) {
-                this.constrainToBounds(square);
-                this.applyVelocityThreshold(square);
+            for (const body of this.bodies) {
+                this.constrainToBounds(body);
+                this.applyVelocityThreshold(body);
             }
         }
     }
 
     // ========================================
-    // VISUALIZATION (Browser rendering)
+    // VISUALIZATION
     // ========================================
     class Renderer {
         constructor(engine, container) {
             this.engine = engine;
             this.container = container;
             this.elements = new Map();
-            this.draggedSquare = null;
+            this.draggedBody = null;
             this.dragOffset = { x: 0, y: 0 };
             this.lastMouse = { x: 0, y: 0 };
             this.lastTime = 0;
         }
 
-        createSquareElement(square, color) {
+        createBodyElement(body, color) {
             const el = document.createElement('div');
-            el.className = 'square';
-            el.style.width = square.size + 'px';
-            el.style.height = square.size + 'px';
+            el.className = 'shape';
+            el.style.width = body.width + 'px';
+            el.style.height = body.height + 'px';
             el.style.backgroundColor = color;
-            el.innerHTML = `<span>${square.name}</span>`;
+            el.innerHTML = `<span>${body.name}</span>`;
             this.container.appendChild(el);
 
-            this.elements.set(square.id, el);
+            this.elements.set(body.id, el);
 
-            el.addEventListener('mousedown', (e) => this.onMouseDown(e, square));
-            el.addEventListener('touchstart', (e) => this.onTouchStart(e, square), { passive: false });
+            el.addEventListener('mousedown', (e) => this.onMouseDown(e, body));
+            el.addEventListener('touchstart', (e) => this.onTouchStart(e, body), { passive: false });
 
             return el;
         }
 
         updatePositions() {
-            for (const square of this.engine.squares) {
-                const el = this.elements.get(square.id);
+            for (const body of this.engine.bodies) {
+                const el = this.elements.get(body.id);
                 if (el) {
-                    el.style.left = square.x + 'px';
-                    el.style.top = square.y + 'px';
+                    el.style.left = body.x + 'px';
+                    el.style.top = body.y + 'px';
                 }
             }
         }
@@ -457,37 +490,37 @@
             return { x: rect.left, y: rect.top };
         }
 
-        onMouseDown(e, square) {
+        onMouseDown(e, body) {
             const offset = this.getContainerOffset();
-            this.draggedSquare = square;
-            square.isDragged = true;
-            this.dragOffset.x = e.clientX - offset.x - square.x;
-            this.dragOffset.y = e.clientY - offset.y - square.y;
+            this.draggedBody = body;
+            body.isDragged = true;
+            this.dragOffset.x = e.clientX - offset.x - body.x;
+            this.dragOffset.y = e.clientY - offset.y - body.y;
             this.lastMouse.x = e.clientX;
             this.lastMouse.y = e.clientY;
             this.lastTime = performance.now();
-            square.vx = 0;
-            square.vy = 0;
-            this.elements.get(square.id).style.zIndex = Date.now();
+            body.vx = 0;
+            body.vy = 0;
+            this.elements.get(body.id).style.zIndex = Date.now();
         }
 
         onMouseMove(e) {
-            if (!this.draggedSquare) return;
+            if (!this.draggedBody) return;
 
             const offset = this.getContainerOffset();
-            const square = this.draggedSquare;
+            const body = this.draggedBody;
             const now = performance.now();
             const dt = (now - this.lastTime) / 1000;
 
             if (dt > 0) {
-                square.vx = (e.clientX - this.lastMouse.x) / dt;
-                square.vy = (e.clientY - this.lastMouse.y) / dt;
+                body.vx = (e.clientX - this.lastMouse.x) / dt;
+                body.vy = (e.clientY - this.lastMouse.y) / dt;
             }
 
-            square.x = e.clientX - offset.x - this.dragOffset.x;
-            square.y = e.clientY - offset.y - this.dragOffset.y;
+            body.x = e.clientX - offset.x - this.dragOffset.x;
+            body.y = e.clientY - offset.y - this.dragOffset.y;
 
-            this.engine.constrainToBounds(square);
+            this.engine.constrainToBounds(body);
 
             this.lastMouse.x = e.clientX;
             this.lastMouse.y = e.clientY;
@@ -495,47 +528,47 @@
         }
 
         onMouseUp() {
-            if (this.draggedSquare) {
-                this.draggedSquare.isDragged = false;
-                this.draggedSquare = null;
+            if (this.draggedBody) {
+                this.draggedBody.isDragged = false;
+                this.draggedBody = null;
             }
         }
 
-        onTouchStart(e, square) {
+        onTouchStart(e, body) {
             e.preventDefault();
             const touch = e.touches[0];
             const offset = this.getContainerOffset();
-            this.draggedSquare = square;
-            square.isDragged = true;
-            this.dragOffset.x = touch.clientX - offset.x - square.x;
-            this.dragOffset.y = touch.clientY - offset.y - square.y;
+            this.draggedBody = body;
+            body.isDragged = true;
+            this.dragOffset.x = touch.clientX - offset.x - body.x;
+            this.dragOffset.y = touch.clientY - offset.y - body.y;
             this.lastMouse.x = touch.clientX;
             this.lastMouse.y = touch.clientY;
             this.lastTime = performance.now();
-            square.vx = 0;
-            square.vy = 0;
-            this.elements.get(square.id).style.zIndex = Date.now();
+            body.vx = 0;
+            body.vy = 0;
+            this.elements.get(body.id).style.zIndex = Date.now();
         }
 
         onTouchMove(e) {
-            if (!this.draggedSquare) return;
+            if (!this.draggedBody) return;
             e.preventDefault();
 
             const touch = e.touches[0];
             const offset = this.getContainerOffset();
-            const square = this.draggedSquare;
+            const body = this.draggedBody;
             const now = performance.now();
             const dt = (now - this.lastTime) / 1000;
 
             if (dt > 0) {
-                square.vx = (touch.clientX - this.lastMouse.x) / dt;
-                square.vy = (touch.clientY - this.lastMouse.y) / dt;
+                body.vx = (touch.clientX - this.lastMouse.x) / dt;
+                body.vy = (touch.clientY - this.lastMouse.y) / dt;
             }
 
-            square.x = touch.clientX - offset.x - this.dragOffset.x;
-            square.y = touch.clientY - offset.y - this.dragOffset.y;
+            body.x = touch.clientX - offset.x - this.dragOffset.x;
+            body.y = touch.clientY - offset.y - this.dragOffset.y;
 
-            this.engine.constrainToBounds(square);
+            this.engine.constrainToBounds(body);
 
             this.lastMouse.x = touch.clientX;
             this.lastMouse.y = touch.clientY;
@@ -543,9 +576,9 @@
         }
 
         onTouchEnd() {
-            if (this.draggedSquare) {
-                this.draggedSquare.isDragged = false;
-                this.draggedSquare = null;
+            if (this.draggedBody) {
+                this.draggedBody.isDragged = false;
+                this.draggedBody = null;
             }
         }
 
@@ -564,57 +597,113 @@
     const playfield = document.getElementById('playfield');
     const playfieldRect = playfield.getBoundingClientRect();
 
-    // Initialize physics engine
     const engine = new PhysicsEngine({
-        gravity: 800,
+        gravity: 1600,
         friction: 0.92,
         bounceDamping: 0.5,
         collisionDamping: 0.8,
         velocityThreshold: 5,
-        bounds: { width: 400, height: playfieldRect.height }
+        bounds: { width: 800, height: playfieldRect.height }
     });
 
-    // Unique box configurations - each has different size, mass, and grip
-    const squareConfigs = [
+    // Fun variety of shapes - all with perfect grip (1.0)
+    const shapeConfigs = [
+        // Boxes
         {
             name: 'Heavy',
-            size: 80,
-            mass: 200,          // Very heavy for its size
-            surfaceFriction: 0.9, // High grip
-            color: '#1a5fb4',   // Deep blue
-            x: 160, y: 50
+            width: 70, height: 70,
+            mass: 180,
+            surfaceFriction: 1.0,
+            color: '#1a5fb4',
+            x: 265, y: 50
         },
         {
             name: 'Bouncy',
-            size: 60,
-            mass: 40,           // Light
-            surfaceFriction: 0.5, // Medium grip
-            color: '#e01b24',   // Red
-            x: 50, y: 120
+            width: 50, height: 50,
+            mass: 30,
+            surfaceFriction: 1.0,
+            color: '#e01b24',
+            x: 150, y: 100
+        },
+
+        // Vertical bars (tall)
+        {
+            name: 'Tower',
+            width: 30, height: 120,
+            mass: 100,
+            surfaceFriction: 1.0,
+            color: '#9141ac',
+            x: 500, y: 80
         },
         {
-            name: 'Slick',
-            size: 70,
-            mass: 70,           // Normal weight
-            surfaceFriction: 0.1, // Very slippery (ice-like)
-            color: '#33d17a',   // Green
-            x: 280, y: 100
+            name: 'Pillar',
+            width: 25, height: 80,
+            mass: 60,
+            surfaceFriction: 1.0,
+            color: '#613583',
+            x: 200, y: 150
         },
+
+        // Horizontal bars (wide)
+        {
+            name: 'Plank',
+            width: 140, height: 25,
+            mass: 90,
+            surfaceFriction: 1.0,
+            color: '#33d17a',
+            x: 330, y: 200
+        },
+        {
+            name: 'Slick Bar',
+            width: 100, height: 20,
+            mass: 50,
+            surfaceFriction: 1.0,
+            color: '#2ec27e',
+            x: 120, y: 250
+        },
+
+        // Bricks
+        {
+            name: 'Brick 1',
+            width: 60, height: 30,
+            mass: 45,
+            surfaceFriction: 1.0,
+            color: '#c64600',
+            x: 140, y: 300
+        },
+        {
+            name: 'Brick 2',
+            width: 60, height: 30,
+            mass: 45,
+            surfaceFriction: 1.0,
+            color: '#a51d2d',
+            x: 320, y: 300
+        },
+        {
+            name: 'Brick 3',
+            width: 60, height: 30,
+            mass: 45,
+            surfaceFriction: 1.0,
+            color: '#865e3c',
+            x: 500, y: 300
+        },
+
+        // Small pieces
         {
             name: 'Tiny',
-            size: 40,
-            mass: 20,           // Very light
-            surfaceFriction: 0.95, // Very grippy (rubber-like)
-            color: '#9141ac',   // Purple
-            x: 100, y: 200
+            width: 35, height: 35,
+            mass: 15,
+            surfaceFriction: 1.0,
+            color: '#ff7800',
+            x: 650, y: 200
         },
         {
-            name: 'Big',
-            size: 100,
-            mass: 100,          // Proportional
-            surfaceFriction: 0.7, // Good grip
-            color: '#ff7800',   // Orange
-            x: 200, y: 180
+            name: 'Pebble',
+            width: 25, height: 25,
+            mass: 10,
+            surfaceFriction: 1.0,
+            color: '#77767b',
+            x: 580, y: 250
         },
     ];
 
@@ -622,22 +711,30 @@
     const renderer = new Renderer(engine, playfield);
     renderer.setupEventListeners();
 
-    // Add squares to engine and create visual elements
-    for (const config of squareConfigs) {
-        const square = engine.addSquare(config);
-        renderer.createSquareElement(square, config.color);
+    // Add shapes to engine and create visual elements
+    for (const config of shapeConfigs) {
+        const body = engine.addBody(config);
+        renderer.createBodyElement(body, config.color);
     }
 
-    // Populate box info panel
-    const boxList = document.getElementById('box-list');
-    boxList.innerHTML = squareConfigs.map(c => `
-        <div style="margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #333;">
-            <div><span class="box-preview" style="background: ${c.color}"></span><strong>${c.name}</strong></div>
-            <div class="box-stat"><span>Size:</span><span class="value">${c.size}px</span></div>
-            <div class="box-stat"><span>Mass:</span><span class="value">${c.mass}</span></div>
-            <div class="box-stat"><span>Grip:</span><span class="value">${(c.surfaceFriction * 100).toFixed(0)}%</span></div>
+    // Populate shape info panel
+    const shapeList = document.getElementById('shape-list');
+    shapeList.innerHTML = shapeConfigs.map(c => {
+        const previewW = Math.min(30, c.width / 2);
+        const previewH = Math.min(20, c.height / 2);
+        return `
+        <div class="shape-item">
+            <div class="shape-header">
+                <span class="shape-preview" style="background: ${c.color}; width: ${previewW}px; height: ${previewH}px;"></span>
+                <strong>${c.name}</strong>
+            </div>
+            <div class="shape-stats">
+                <div>Size: <span>${c.width}×${c.height}</span></div>
+                <div>Mass: <span>${c.mass}</span></div>
+                <div>Grip: <span>${(c.surfaceFriction * 100).toFixed(0)}%</span></div>
+            </div>
         </div>
-    `).join('');
+    `}).join('');
 
     // Setup dev controls
     const controls = ['gravity', 'friction', 'bounceDamping', 'collisionDamping', 'minBounceRatio', 'surfaceFriction'];
@@ -672,9 +769,9 @@
         requestAnimationFrame(gameLoop);
     }
 
-    // Run simple validation
+    // Status
     const resultsDiv = document.getElementById('test-results');
-    resultsDiv.innerHTML = '<span class="test-pass">✓ Engine loaded</span><br><span class="test-pass">✓ ' + engine.squares.length + ' boxes created</span>';
+    resultsDiv.innerHTML = '<span class="test-pass">✓ ' + engine.bodies.length + ' shapes loaded</span>';
     setTimeout(() => { resultsDiv.style.display = 'none'; }, 3000);
 
     requestAnimationFrame(gameLoop);
