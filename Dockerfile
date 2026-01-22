@@ -6,12 +6,18 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Claude Code globally via npm (lighter install)
-RUN npm install -g @anthropic-ai/claude-code
-
 # Create a non-root user for security
 RUN useradd -m -s /bin/bash developer
+
+# Switch to developer to install Claude Code in their home
 USER developer
+WORKDIR /home/developer
+
+# Install Claude Code using official installer (uses Pro plan auth)
+RUN curl -fsSL https://claude.ai/install.sh | bash
+
+# Add Claude to PATH
+ENV PATH="/home/developer/.claude/bin:${PATH}"
 
 # Set working directory (will be mounted)
 WORKDIR /workspace
