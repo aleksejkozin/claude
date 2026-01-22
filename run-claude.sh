@@ -1,14 +1,7 @@
 #!/bin/bash
 
-# Claude Code Docker Runner
+# Claude Code Docker Runner (uses Pro plan auth)
 # Usage: ./run-claude.sh [any claude arguments]
-
-# Check for API key
-if [ -z "$ANTHROPIC_API_KEY" ]; then
-    echo "Warning: ANTHROPIC_API_KEY not set"
-    echo "Set it with: export ANTHROPIC_API_KEY=your-key"
-    echo ""
-fi
 
 # Build if image doesn't exist
 if ! docker image inspect claude-code:local &> /dev/null; then
@@ -17,4 +10,5 @@ if ! docker image inspect claude-code:local &> /dev/null; then
 fi
 
 # Run Claude Code
+# First run will prompt for login via browser
 docker compose run --rm claude-code claude "$@"

@@ -13,14 +13,10 @@ services:
     # Mount your project directory
     volumes:
       - .:/workspace
-      # Persist Claude Code config between sessions
+      # Persist Claude Code auth/config between sessions
       - claude-config:/home/developer/.claude
 
-    # Pass API key from environment
-    environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-
-    # Network access enabled by default
+    # Network access for auth and API
     network_mode: bridge
 
     # Working directory inside container
