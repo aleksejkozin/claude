@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  claude-code:
+    build: .
+    image: claude-code:local
+    container_name: claude-code
+
+    # Interactive terminal
+    stdin_open: true
+    tty: true
+
+    # Mount your project directory
+    volumes:
+      - .:/workspace
+      # Persist Claude Code config between sessions
+      - claude-config:/home/developer/.claude
+
+    # Pass API key from environment
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+
+    # Network access enabled by default
+    network_mode: bridge
+
+    # Working directory inside container
+    working_dir: /workspace
+
+volumes:
+  claude-config:
+    name: claude-code-config
