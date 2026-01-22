@@ -21,6 +21,7 @@ export function createWorld(width, height) {
     selectedBlockId: null,
     draggedBlockId: null,
     dragOffset: { x: 0, y: 0 },
+    lastDragTime: 0,
     paused: false,
   };
 }
@@ -80,6 +81,7 @@ export function startDrag(world, blockId, mouseX, mouseY) {
     x: mouseX - block.x,
     y: mouseY - block.y,
   };
+  world.lastDragTime = performance.now();
   block.isDragging = true;
   block.vx = 0;
   block.vy = 0;
@@ -91,6 +93,10 @@ export function updateDrag(world, mouseX, mouseY) {
   const block = getBlockById(world, world.draggedBlockId);
   if (!block) return;
 
+  const now = performance.now();
+  const dt = (now - world.lastDragTime) / 1000; // convert to seconds
+  world.lastDragTime = now;
+
   const newX = mouseX - world.dragOffset.x;
   const newY = mouseY - world.dragOffset.y;
   const dx = newX - block.x;
@@ -99,8 +105,8 @@ export function updateDrag(world, mouseX, mouseY) {
   block.x = newX;
   block.y = newY;
 
-  // Apply friction to blocks resting on top
-  applyDragFriction(block, world.blocks, dx, dy);
+  // Apply friction to blocks resting on top (with velocity for inertia)
+  applyDragFriction(block, world.blocks, dx, dy, dt);
 }
 
 export function endDrag(world) {

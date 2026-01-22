@@ -414,7 +414,7 @@ test('applyDragFriction moves blocks on top with high friction', () => {
   bottom.isDragging = true;
   const blocks = [bottom, top];
 
-  applyDragFriction(bottom, blocks, 20, 0); // drag right by 20
+  applyDragFriction(bottom, blocks, 20, 0, 0.016); // drag right by 20, ~60fps
 
   // With friction = 1.0, top should move fully with bottom
   assertEqual(top.x, 120);
@@ -426,7 +426,7 @@ test('applyDragFriction moves blocks less with low friction', () => {
   bottom.isDragging = true;
   const blocks = [bottom, top];
 
-  applyDragFriction(bottom, blocks, 20, 0); // drag right by 20
+  applyDragFriction(bottom, blocks, 20, 0, 0.016); // drag right by 20
 
   // With friction = 0.5, top should move partially
   assertTrue(top.x > 100); // moved
@@ -439,7 +439,7 @@ test('applyDragFriction sticky blocks move fully with dragged block', () => {
   bottom.isDragging = true;
   const blocks = [bottom, top];
 
-  applyDragFriction(bottom, blocks, 20, 0);
+  applyDragFriction(bottom, blocks, 20, 0, 0.016);
 
   // Sticky bottom means top moves 100%
   assertEqual(top.x, 120);
@@ -451,7 +451,7 @@ test('applyDragFriction slippery blocks have very low friction', () => {
   bottom.isDragging = true;
   const blocks = [bottom, top];
 
-  applyDragFriction(bottom, blocks, 20, 0);
+  applyDragFriction(bottom, blocks, 20, 0, 0.016);
 
   // Slippery means very low effective friction
   assertTrue(top.x < 105); // barely moved
@@ -464,11 +464,24 @@ test('applyDragFriction cascades to multiple levels', () => {
   bottom.isDragging = true;
   const blocks = [bottom, middle, top];
 
-  applyDragFriction(bottom, blocks, 20, 0);
+  applyDragFriction(bottom, blocks, 20, 0, 0.016);
 
   // All blocks should move with full friction
   assertEqual(middle.x, 120);
   assertEqual(top.x, 120);
+});
+
+test('applyDragFriction sets velocity for inertia', () => {
+  const bottom = createBlock({ x: 100, y: 100, width: 50, height: 50, friction: 1.0 });
+  const top = createBlock({ x: 100, y: 50, width: 50, height: 50, friction: 1.0 });
+  bottom.isDragging = true;
+  const blocks = [bottom, top];
+
+  // Move 20 pixels in 0.016 seconds (16ms frame)
+  applyDragFriction(bottom, blocks, 20, 0, 0.016);
+
+  // Top should have velocity = dx / dt = 20 / 0.016 = 1250 px/s
+  assertApprox(top.vx, 1250, 1);
 });
 
 test('dragging block moves blocks on top via updateDrag', () => {

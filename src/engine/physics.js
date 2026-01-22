@@ -232,7 +232,8 @@ export function getBlocksRestingOn(block, allBlocks) {
 }
 
 // Apply drag friction: when a block is dragged, blocks on top move with it
-export function applyDragFriction(draggedBlock, allBlocks, dx, dy, visited = new Set()) {
+// Also sets velocity so blocks continue with inertia when drag stops
+export function applyDragFriction(draggedBlock, allBlocks, dx, dy, dt, visited = new Set()) {
   if (visited.has(draggedBlock.id)) return;
   visited.add(draggedBlock.id);
 
@@ -245,10 +246,17 @@ export function applyDragFriction(draggedBlock, allBlocks, dx, dy, visited = new
     // Sticky blocks move 100% with the dragged block
     const moveFactor = draggedBlock.sticky || block.sticky ? 1.0 : friction;
 
-    block.x += dx * moveFactor;
+    const effectiveDx = dx * moveFactor;
+    block.x += effectiveDx;
     block.y += dy;
 
+    // Set velocity for inertia (when drag stops, block continues moving)
+    if (dt > 0) {
+      block.vx = effectiveDx / dt;
+      block.vy = dy / dt;
+    }
+
     // Recursively apply to blocks on top of this one
-    applyDragFriction(block, allBlocks, dx * moveFactor, dy, visited);
+    applyDragFriction(block, allBlocks, effectiveDx, dy, dt, visited);
   }
 }
