@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tower Builder - Tests</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            min-height: 100vh;
+            background: #0a0a15;
+            font-family: 'Consolas', 'Monaco', monospace;
+            color: #fff;
+            padding: 30px;
+        }
+        h1 {
+            margin-bottom: 20px;
+            color: #88f;
+        }
+        #results {
+            background: #12121f;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        #results h2 {
+            margin-bottom: 15px;
+        }
+        #results ul {
+            margin-top: 15px;
+        }
+        #results li {
+            padding: 5px 10px;
+            border-radius: 4px;
+            margin-bottom: 4px;
+        }
+        a {
+            display: inline-block;
+            margin-top: 20px;
+            color: #88f;
+        }
+    </style>
+</head>
+<body>
+    <h1>Engine Tests</h1>
+    <div id="results">Running tests...</div>
+    <a href="index.html">Back to Dev Mode</a>
+
+    <script type="module">
+        import './src/tests/engine.test.js';
+        import { getResults, renderResults } from './src/tests/test-runner.js';
+
+        // Wait a tick for tests to complete
+        setTimeout(() => {
+            const container = document.getElementById('results');
+            container.innerHTML = '';
+            renderResults(container);
+        }, 100);
+    </script>
+</body>
+</html>
