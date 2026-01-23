@@ -231,15 +231,6 @@ Applied tangent to collision (perpendicular to separation axis):
 | 0.5 | Normal (default) |
 | 1.0 | Maximum grip |
 
-### Drag Friction (blocks moving with dragged block)
-
-When you drag a block, blocks resting on top should move with it:
-
-1. Find all blocks whose bottom touches dragged block's top
-2. Move each by `dx * moveFactor` where `moveFactor = (A.friction + B.friction) / 2`
-3. Set velocity for inertia when drag ends: `vx = effectiveDx / dt`
-4. Recursively apply to blocks stacked higher
-
 ### Mass Effects Summary
 
 | Scenario | Heavy Block | Light Block |
