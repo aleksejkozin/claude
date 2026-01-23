@@ -130,6 +130,31 @@ function setupControlEvents() {
   inputs.forEach(input => {
     input.addEventListener('change', onInputChange);
   });
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', onKeyDown);
+}
+
+function onKeyDown(e) {
+  // Ignore if typing in an input
+  if (e.target.tagName === 'INPUT') return;
+
+  switch (e.key.toLowerCase()) {
+    case 'c':
+    case 'n':
+      onCreateBlock();
+      break;
+    case 'd':
+    case 'delete':
+    case 'backspace':
+      onDeleteBlock();
+      e.preventDefault();
+      break;
+    case ' ':
+      onTogglePause();
+      e.preventDefault();
+      break;
+  }
 }
 
 function getFormValues() {

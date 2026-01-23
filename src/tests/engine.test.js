@@ -426,4 +426,31 @@ test('block falling onto another should bounce and rest, not push sideways', () 
   assertTrue(Math.abs(bottom.vy) < 1, 'Bottom block should not get large velocity');
 });
 
+test('friction transfers velocity from dragging block to resting block', () => {
+  // Bottom block being dragged with velocity
+  const bottom = createBlock({
+    x: 1, y: 3,
+    width: 0.5, height: 0.5,
+    friction: 1.0,
+    vx: 5, vy: 0 // moving right at 5 m/s
+  });
+  bottom.isDragging = true;
+
+  // Top block resting on bottom, stationary
+  const top = createBlock({
+    x: 1, y: 2.45, // slight overlap
+    width: 0.5, height: 0.5,
+    friction: 1.0,
+    vx: 0, vy: 0
+  });
+
+  const collision = checkCollision(top, bottom);
+  assertNotNull(collision, 'Should detect collision');
+
+  resolveCollision(top, bottom, collision);
+
+  // With friction=1, top block should match bottom's velocity
+  assertApprox(top.vx, 5, 0.1, 'Top block should move with dragged block');
+});
+
 console.log('\n=== All tests complete ===');

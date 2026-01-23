@@ -134,27 +134,43 @@ function applyFriction(block1, block2, separateOnX) {
   const friction = getEffectiveFriction(block1, block2);
 
   // Friction acts on the tangent axis (perpendicular to collision)
+  // With friction=1, relative tangent velocity should become 0 (move together)
+  // With friction=0, no friction (slide freely)
+
+  const canMove1 = !block1.isStatic && !block1.isDragging;
+  const canMove2 = !block2.isStatic && !block2.isDragging;
+
   if (separateOnX) {
     // X collision - friction affects Y velocity (tangent)
     const relVy = block1.vy - block2.vy;
-    const frictionImpulse = relVy * friction * 0.5;
 
-    if (!block1.isStatic && !block1.isDragging) {
-      block1.vy -= frictionImpulse;
-    }
-    if (!block2.isStatic && !block2.isDragging) {
-      block2.vy += frictionImpulse;
+    if (canMove1 && canMove2) {
+      // Both can move - split friction
+      const impulse = relVy * friction * 0.5;
+      block1.vy -= impulse;
+      block2.vy += impulse;
+    } else if (canMove1) {
+      // Only block1 can move - it gets full friction
+      block1.vy -= relVy * friction;
+    } else if (canMove2) {
+      // Only block2 can move - it gets full friction
+      block2.vy += relVy * friction;
     }
   } else {
     // Y collision - friction affects X velocity (tangent)
     const relVx = block1.vx - block2.vx;
-    const frictionImpulse = relVx * friction * 0.5;
 
-    if (!block1.isStatic && !block1.isDragging) {
-      block1.vx -= frictionImpulse;
-    }
-    if (!block2.isStatic && !block2.isDragging) {
-      block2.vx += frictionImpulse;
+    if (canMove1 && canMove2) {
+      // Both can move - split friction
+      const impulse = relVx * friction * 0.5;
+      block1.vx -= impulse;
+      block2.vx += impulse;
+    } else if (canMove1) {
+      // Only block1 can move - it gets full friction
+      block1.vx -= relVx * friction;
+    } else if (canMove2) {
+      // Only block2 can move - it gets full friction
+      block2.vx += relVx * friction;
     }
   }
 }
