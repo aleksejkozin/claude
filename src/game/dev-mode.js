@@ -16,16 +16,12 @@ import {
   clearBlocks,
   exportWorldState,
   importTemplates,
-  exportTemplates,
-  saveBlockTemplate
 } from '../engine/world.js';
-import { createRenderer, drawWorld } from '../renderer/canvas.js';
+import { createRenderer, drawWorld, PIXELS_PER_METER } from '../renderer/canvas.js';
 
 let world;
 let renderer;
 let lastTime = 0;
-let mouseX = 0;
-let mouseY = 0;
 
 // DOM elements
 let canvas;
@@ -35,8 +31,10 @@ export function init(canvasElement, controlsElement) {
   canvas = canvasElement;
   controls = controlsElement;
 
-  // Create world and renderer
-  world = createWorld(canvas.width, canvas.height);
+  // Create world in meters (canvas pixels / PIXELS_PER_METER)
+  const worldWidth = canvas.width / PIXELS_PER_METER;
+  const worldHeight = canvas.height / PIXELS_PER_METER;
+  world = createWorld(worldWidth, worldHeight);
   renderer = createRenderer(canvas);
 
   // Setup event listeners
@@ -59,15 +57,22 @@ function setupCanvasEvents() {
   canvas.addEventListener('touchend', onTouchEnd);
 }
 
+// Convert pixel coordinates to meters
+function toMeters(pixelX, pixelY) {
+  return {
+    x: pixelX / PIXELS_PER_METER,
+    y: pixelY / PIXELS_PER_METER,
+  };
+}
+
 function onMouseDown(e) {
   const rect = canvas.getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
+  const pos = toMeters(e.clientX - rect.left, e.clientY - rect.top);
 
-  const block = getBlockAt(world, x, y);
+  const block = getBlockAt(world, pos.x, pos.y);
   if (block) {
     selectBlock(world, block.id);
-    startDrag(world, block.id, x, y);
+    startDrag(world, block.id, pos.x, pos.y);
     updateControlsFromBlock(block);
   } else {
     selectBlock(world, null);
@@ -76,13 +81,12 @@ function onMouseDown(e) {
 
 function onMouseMove(e) {
   const rect = canvas.getBoundingClientRect();
-  mouseX = e.clientX - rect.left;
-  mouseY = e.clientY - rect.top;
-
-  updateDrag(world, mouseX, mouseY);
+  const pos = toMeters(e.clientX - rect.left, e.clientY - rect.top);
+  const dt = 1 / 60; // Approximate frame time
+  updateDrag(world, pos.x, pos.y, dt);
 }
 
-function onMouseUp(e) {
+function onMouseUp() {
   endDrag(world);
 }
 
@@ -90,13 +94,12 @@ function onTouchStart(e) {
   e.preventDefault();
   const touch = e.touches[0];
   const rect = canvas.getBoundingClientRect();
-  const x = touch.clientX - rect.left;
-  const y = touch.clientY - rect.top;
+  const pos = toMeters(touch.clientX - rect.left, touch.clientY - rect.top);
 
-  const block = getBlockAt(world, x, y);
+  const block = getBlockAt(world, pos.x, pos.y);
   if (block) {
     selectBlock(world, block.id);
-    startDrag(world, block.id, x, y);
+    startDrag(world, block.id, pos.x, pos.y);
     updateControlsFromBlock(block);
   }
 }
@@ -105,55 +108,37 @@ function onTouchMove(e) {
   e.preventDefault();
   const touch = e.touches[0];
   const rect = canvas.getBoundingClientRect();
-  mouseX = touch.clientX - rect.left;
-  mouseY = touch.clientY - rect.top;
-
-  updateDrag(world, mouseX, mouseY);
+  const pos = toMeters(touch.clientX - rect.left, touch.clientY - rect.top);
+  const dt = 1 / 60;
+  updateDrag(world, pos.x, pos.y, dt);
 }
 
-function onTouchEnd(e) {
+function onTouchEnd() {
   endDrag(world);
 }
 
 function setupControlEvents() {
-  // Create block button
   controls.querySelector('#create-block').addEventListener('click', onCreateBlock);
-
-  // Delete block button
   controls.querySelector('#delete-block').addEventListener('click', onDeleteBlock);
-
-  // Clear all button
   controls.querySelector('#clear-all').addEventListener('click', onClearAll);
-
-  // Pause/Resume button
   controls.querySelector('#toggle-pause').addEventListener('click', onTogglePause);
-
-  // Export JSON button
   controls.querySelector('#export-json').addEventListener('click', onExportJSON);
-
-  // Import JSON button
   controls.querySelector('#import-json').addEventListener('click', onImportJSON);
 
-  // Save as template button
-  controls.querySelector('#save-template').addEventListener('click', onSaveTemplate);
-
   // Update selected block when inputs change
-  const inputs = controls.querySelectorAll('input, select');
+  const inputs = controls.querySelectorAll('input');
   inputs.forEach(input => {
     input.addEventListener('change', onInputChange);
   });
 }
 
 function getFormValues() {
-  const surface = controls.querySelector('#block-surface').value;
   return {
-    width: parseFloat(controls.querySelector('#block-width').value) || 50,
-    height: parseFloat(controls.querySelector('#block-height').value) || 50,
+    width: parseFloat(controls.querySelector('#block-width').value) || 0.5,
+    height: parseFloat(controls.querySelector('#block-height').value) || 0.5,
     mass: parseFloat(controls.querySelector('#block-mass').value) || 1,
     friction: parseFloat(controls.querySelector('#block-friction').value) || 0.5,
     bounciness: parseFloat(controls.querySelector('#block-bounciness').value) || 0.2,
-    sticky: surface === 'sticky',
-    slippery: surface === 'slippery',
   };
 }
 
@@ -163,11 +148,6 @@ function setFormValues(values) {
   controls.querySelector('#block-mass').value = values.mass;
   controls.querySelector('#block-friction').value = values.friction;
   controls.querySelector('#block-bounciness').value = values.bounciness;
-
-  let surface = 'normal';
-  if (values.sticky) surface = 'sticky';
-  else if (values.slippery) surface = 'slippery';
-  controls.querySelector('#block-surface').value = surface;
 }
 
 function updateControlsFromBlock(block) {
@@ -177,8 +157,6 @@ function updateControlsFromBlock(block) {
     mass: block.mass,
     friction: block.friction,
     bounciness: block.bounciness,
-    sticky: block.sticky,
-    slippery: block.slippery,
   });
 }
 
@@ -187,7 +165,7 @@ function onCreateBlock() {
   const block = createBlock({
     ...values,
     x: world.width / 2 - values.width / 2,
-    y: 50,
+    y: 0.5, // Start near top
   });
   addBlock(world, block);
   selectBlock(world, block.id);
@@ -217,7 +195,7 @@ function onExportJSON() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'tower-blocks.json';
+  a.download = 'world-state.json';
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -233,9 +211,9 @@ function onImportJSON() {
       reader.onload = (e) => {
         const success = importTemplates(world, e.target.result);
         if (success) {
-          alert('Templates imported successfully!');
+          alert('Imported successfully!');
         } else {
-          alert('Failed to import templates.');
+          alert('Failed to import.');
         }
       };
       reader.readAsText(file);
@@ -244,24 +222,7 @@ function onImportJSON() {
   input.click();
 }
 
-function onSaveTemplate() {
-  if (world.selectedBlockId) {
-    const block = getBlockById(world, world.selectedBlockId);
-    if (block) {
-      saveBlockTemplate(world, block);
-      alert('Block saved as template!');
-    }
-  } else {
-    // Save current form values as template
-    const values = getFormValues();
-    const tempBlock = createBlock(values);
-    saveBlockTemplate(world, tempBlock);
-    alert('Current settings saved as template!');
-  }
-}
-
 function onInputChange() {
-  // Update selected block with new values
   if (world.selectedBlockId) {
     const block = getBlockById(world, world.selectedBlockId);
     if (block) {
@@ -271,8 +232,6 @@ function onInputChange() {
       block.mass = values.mass;
       block.friction = values.friction;
       block.bounciness = values.bounciness;
-      block.sticky = values.sticky;
-      block.slippery = values.slippery;
     }
   }
 }

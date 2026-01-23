@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tower Builder - Dev Mode</title>
+    <title>Physics Sandbox</title>
     <style>
         * {
             margin: 0;
@@ -30,7 +30,7 @@
             border-radius: 8px;
         }
         #controls {
-            width: 280px;
+            width: 240px;
             background: #12121f;
             padding: 20px;
             border-left: 1px solid #333;
@@ -59,7 +59,7 @@
             font-size: 0.9rem;
         }
         label span {
-            width: 90px;
+            width: 80px;
             flex-shrink: 0;
         }
         input[type="number"] {
@@ -72,24 +72,6 @@
             font-size: 0.9rem;
         }
         input[type="number"]:focus {
-            outline: none;
-            border-color: #88f;
-        }
-        input[type="checkbox"] {
-            width: 18px;
-            height: 18px;
-            margin-right: 10px;
-        }
-        select {
-            flex: 1;
-            padding: 6px 10px;
-            background: #1a1a2e;
-            border: 1px solid #333;
-            border-radius: 4px;
-            color: #fff;
-            font-size: 0.9rem;
-        }
-        select:focus {
             outline: none;
             border-color: #88f;
         }
@@ -122,18 +104,17 @@
         button.danger:hover {
             background: #883333;
         }
-        .checkbox-label {
-            cursor: pointer;
-        }
-        .checkbox-label input {
-            cursor: pointer;
-        }
         .btn-row {
             display: flex;
             gap: 8px;
         }
         .btn-row button {
             flex: 1;
+        }
+        .hint {
+            font-size: 0.75rem;
+            color: #666;
+            margin-top: 5px;
         }
         #test-link {
             display: block;
@@ -150,24 +131,24 @@
 </head>
 <body>
     <div id="game-area">
-        <canvas id="gameCanvas" width="350" height="600"></canvas>
+        <canvas id="gameCanvas" width="800" height="400"></canvas>
     </div>
 
     <div id="controls">
-        <h2>Dev Mode</h2>
+        <h2>Sandbox</h2>
 
         <div class="control-group">
             <h3>Block Properties</h3>
             <label>
-                <span>Width:</span>
-                <input type="number" id="block-width" value="50" min="10" max="200" step="5">
+                <span>Width (m):</span>
+                <input type="number" id="block-width" value="0.5" min="0.1" max="2" step="0.1">
             </label>
             <label>
-                <span>Height:</span>
-                <input type="number" id="block-height" value="50" min="10" max="200" step="5">
+                <span>Height (m):</span>
+                <input type="number" id="block-height" value="0.5" min="0.1" max="2" step="0.1">
             </label>
             <label>
-                <span>Mass:</span>
+                <span>Mass (kg):</span>
                 <input type="number" id="block-mass" value="1" min="0.1" max="10" step="0.1">
             </label>
             <label>
@@ -178,32 +159,24 @@
                 <span>Bounciness:</span>
                 <input type="number" id="block-bounciness" value="0.2" min="0" max="1" step="0.1">
             </label>
-            <label>
-                <span>Surface:</span>
-                <select id="block-surface">
-                    <option value="normal">Normal</option>
-                    <option value="sticky">Sticky</option>
-                    <option value="slippery">Slippery</option>
-                </select>
-            </label>
+            <p class="hint">Friction: 0=ice, 1=grip</p>
         </div>
 
         <div class="control-group">
             <h3>Actions</h3>
             <button id="create-block" class="primary">Create Block</button>
             <div class="btn-row">
-                <button id="delete-block" class="danger">Delete Selected</button>
+                <button id="delete-block" class="danger">Delete</button>
                 <button id="clear-all" class="danger">Clear All</button>
             </div>
             <button id="toggle-pause">Pause</button>
         </div>
 
         <div class="control-group">
-            <h3>Templates</h3>
-            <button id="save-template">Save as Template</button>
+            <h3>Data</h3>
             <div class="btn-row">
-                <button id="export-json">Export JSON</button>
-                <button id="import-json">Import JSON</button>
+                <button id="export-json">Export</button>
+                <button id="import-json">Import</button>
             </div>
         </div>
 

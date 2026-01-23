@@ -1,9 +1,13 @@
 // Physics module - procedural style
-// Handles gravity, collision detection and resolution
+// All units in meters (SI)
 
-import { getBounds, getEffectiveFriction, getEffectiveBounciness, shouldStick } from './block.js';
+import { getBounds, getCenter, getEffectiveFriction, getEffectiveBounciness } from './block.js';
 
-export const GRAVITY = 980; // pixels per second squared
+// Constants
+export const GRAVITY = 9.8;           // m/s²
+export const DAMPING = 0.99;          // per frame
+export const SLEEP_THRESHOLD = 0.001; // m/s
+export const MAX_VELOCITY = 100;      // m/s
 
 export function applyGravity(block, dt) {
   if (block.isStatic || block.isDragging) return;
@@ -20,163 +24,136 @@ export function checkCollision(block1, block2) {
   const b1 = getBounds(block1);
   const b2 = getBounds(block2);
 
-  const colliding = !(
-    b1.right <= b2.left ||
-    b1.left >= b2.right ||
-    b1.bottom <= b2.top ||
-    b1.top >= b2.bottom
-  );
-
-  if (!colliding) return null;
-
   // Calculate overlap on each axis
-  const overlapLeft = b1.right - b2.left;
-  const overlapRight = b2.right - b1.left;
-  const overlapTop = b1.bottom - b2.top;
-  const overlapBottom = b2.bottom - b1.top;
+  const overlapX = Math.min(b1.right - b2.left, b2.right - b1.left);
+  const overlapY = Math.min(b1.bottom - b2.top, b2.bottom - b1.top);
 
-  const minOverlapX = Math.min(overlapLeft, overlapRight);
-  const minOverlapY = Math.min(overlapTop, overlapBottom);
+  // No collision if no overlap on either axis
+  if (overlapX <= 0 || overlapY <= 0) return null;
 
-  // Always use center-to-center normal - works for both edge and corner collisions
-  const center1x = block1.x + block1.width / 2;
-  const center1y = block1.y + block1.height / 2;
-  const center2x = block2.x + block2.width / 2;
-  const center2y = block2.y + block2.height / 2;
+  // Direction from B to A (center to center)
+  const c1 = getCenter(block1);
+  const c2 = getCenter(block2);
+  const dirX = Math.sign(c1.x - c2.x) || 1;
+  const dirY = Math.sign(c1.y - c2.y) || 1;
 
-  const dx = center1x - center2x;
-  const dy = center1y - center2y;
-  const length = Math.sqrt(dx * dx + dy * dy);
-
-  let normal;
-  if (length > 0) {
-    normal = { x: dx / length, y: dy / length };
-  } else {
-    // Blocks perfectly overlapping, fallback to vertical
-    normal = { x: 0, y: -1 };
-  }
-
-  const penetration = Math.min(minOverlapX, minOverlapY);
-
-  return { normal, penetration };
+  return { overlapX, overlapY, dirX, dirY };
 }
 
 export function resolveCollision(block1, block2, collision) {
   if (!collision) return;
-
-  const { normal, penetration } = collision;
-
-  // Both static? Nothing to do
   if (block1.isStatic && block2.isStatic) return;
 
-  // Separate blocks
-  separateBlocks(block1, block2, normal, penetration);
+  const { overlapX, overlapY, dirX, dirY } = collision;
 
-  // Calculate relative velocity
-  const relVelX = block1.vx - block2.vx;
-  const relVelY = block1.vy - block2.vy;
-  const relVelAlongNormal = relVelX * normal.x + relVelY * normal.y;
+  // Step 1: Separate blocks on each axis
+  separateBlocks(block1, block2, overlapX, overlapY, dirX, dirY);
 
-  // Don't resolve if velocities are separating
-  if (relVelAlongNormal > 0) return;
+  // Step 2: Apply impulse on each axis independently
+  applyImpulse(block1, block2, dirX, dirY);
 
-  // Get bounciness
+  // Step 3: Apply friction (tangent to collision)
+  applyFriction(block1, block2, overlapX, overlapY);
+}
+
+function separateBlocks(block1, block2, overlapX, overlapY, dirX, dirY) {
+  // Simple 50/50 split for dynamic blocks, full push for static
+  if (block1.isStatic) {
+    block2.x -= dirX * overlapX;
+    block2.y -= dirY * overlapY;
+  } else if (block2.isStatic) {
+    block1.x += dirX * overlapX;
+    block1.y += dirY * overlapY;
+  } else {
+    // Both dynamic: split 50/50
+    block1.x += dirX * overlapX * 0.5;
+    block1.y += dirY * overlapY * 0.5;
+    block2.x -= dirX * overlapX * 0.5;
+    block2.y -= dirY * overlapY * 0.5;
+  }
+}
+
+function applyImpulse(block1, block2, dirX, dirY) {
   const bounciness = getEffectiveBounciness(block1, block2);
 
-  // Calculate impulse
-  const totalInverseMass =
-    (block1.isStatic ? 0 : 1 / block1.mass) +
-    (block2.isStatic ? 0 : 1 / block2.mass);
+  const invMass1 = block1.isStatic ? 0 : 1 / block1.mass;
+  const invMass2 = block2.isStatic ? 0 : 1 / block2.mass;
+  const totalInvMass = invMass1 + invMass2;
 
-  if (totalInverseMass === 0) return;
+  if (totalInvMass === 0) return;
 
-  const impulse = -(1 + bounciness) * relVelAlongNormal / totalInverseMass;
+  // X axis impulse
+  const relVx = block1.vx - block2.vx;
+  const approachingX = (relVx * dirX) < 0;
 
-  // Apply impulse
-  if (!block1.isStatic && !block1.isDragging) {
-    block1.vx += impulse * normal.x / block1.mass;
-    block1.vy += impulse * normal.y / block1.mass;
+  if (approachingX) {
+    const jx = -(1 + bounciness) * relVx / totalInvMass;
+    if (!block1.isStatic && !block1.isDragging) {
+      block1.vx += jx * invMass1;
+    }
+    if (!block2.isStatic && !block2.isDragging) {
+      block2.vx -= jx * invMass2;
+    }
   }
-  if (!block2.isStatic && !block2.isDragging) {
-    block2.vx -= impulse * normal.x / block2.mass;
-    block2.vy -= impulse * normal.y / block2.mass;
-  }
 
-  // Apply friction (tangent to collision)
-  applyFriction(block1, block2, normal);
+  // Y axis impulse
+  const relVy = block1.vy - block2.vy;
+  const approachingY = (relVy * dirY) < 0;
 
-  // Handle sticky blocks
-  if (shouldStick(block1, block2)) {
-    handleSticking(block1, block2);
-  }
-}
-
-function separateBlocks(block1, block2, normal, penetration) {
-  if (block1.isStatic && block2.isStatic) return;
-
-  const totalInverseMass =
-    (block1.isStatic ? 0 : 1 / block1.mass) +
-    (block2.isStatic ? 0 : 1 / block2.mass);
-
-  if (totalInverseMass === 0) return;
-
-  const correction = penetration / totalInverseMass;
-  const slop = 0.01; // Small tolerance to prevent jitter
-  const correctionAmount = Math.max(penetration - slop, 0) / totalInverseMass * 0.8;
-
-  if (!block1.isStatic) {
-    block1.x += normal.x * correctionAmount / block1.mass;
-    block1.y += normal.y * correctionAmount / block1.mass;
-  }
-  if (!block2.isStatic) {
-    block2.x -= normal.x * correctionAmount / block2.mass;
-    block2.y -= normal.y * correctionAmount / block2.mass;
+  if (approachingY) {
+    const jy = -(1 + bounciness) * relVy / totalInvMass;
+    if (!block1.isStatic && !block1.isDragging) {
+      block1.vy += jy * invMass1;
+    }
+    if (!block2.isStatic && !block2.isDragging) {
+      block2.vy -= jy * invMass2;
+    }
   }
 }
 
-function applyFriction(block1, block2, normal) {
-  // Tangent is perpendicular to normal
-  const tangent = { x: -normal.y, y: normal.x };
-
-  const relVelX = block1.vx - block2.vx;
-  const relVelY = block1.vy - block2.vy;
-  const relVelAlongTangent = relVelX * tangent.x + relVelY * tangent.y;
-
+function applyFriction(block1, block2, overlapX, overlapY) {
   const friction = getEffectiveFriction(block1, block2);
-  const frictionImpulse = relVelAlongTangent * friction;
 
-  if (!block1.isStatic && !block1.isDragging) {
-    block1.vx -= frictionImpulse * tangent.x * 0.5;
-    block1.vy -= frictionImpulse * tangent.y * 0.5;
-  }
-  if (!block2.isStatic && !block2.isDragging) {
-    block2.vx += frictionImpulse * tangent.x * 0.5;
-    block2.vy += frictionImpulse * tangent.y * 0.5;
+  // Determine which axis is the contact surface
+  // Smaller overlap = separation axis, larger overlap = contact surface (tangent)
+  if (overlapX < overlapY) {
+    // Vertical contact surface - friction affects Y velocity
+    const relVy = block1.vy - block2.vy;
+    const frictionImpulse = relVy * friction * 0.5;
+
+    if (!block1.isStatic && !block1.isDragging) {
+      block1.vy -= frictionImpulse;
+    }
+    if (!block2.isStatic && !block2.isDragging) {
+      block2.vy += frictionImpulse;
+    }
+  } else {
+    // Horizontal contact surface - friction affects X velocity
+    const relVx = block1.vx - block2.vx;
+    const frictionImpulse = relVx * friction * 0.5;
+
+    if (!block1.isStatic && !block1.isDragging) {
+      block1.vx -= frictionImpulse;
+    }
+    if (!block2.isStatic && !block2.isDragging) {
+      block2.vx += frictionImpulse;
+    }
   }
 }
 
-function handleSticking(block1, block2) {
-  if (!block1.stuckTo.includes(block2.id)) {
-    block1.stuckTo.push(block2.id);
-  }
-  if (!block2.stuckTo.includes(block1.id)) {
-    block2.stuckTo.push(block1.id);
-  }
-}
-
-export function unstick(block1, block2) {
-  block1.stuckTo = block1.stuckTo.filter(id => id !== block2.id);
-  block2.stuckTo = block2.stuckTo.filter(id => id !== block1.id);
-}
-
-export function isStuckTo(block1, block2) {
-  return block1.stuckTo.includes(block2.id);
-}
-
-export function applyDamping(block, damping = 0.99) {
+export function applyDamping(block) {
   if (block.isStatic || block.isDragging) return;
-  block.vx *= damping;
-  block.vy *= damping;
+
+  block.vx *= DAMPING;
+  block.vy *= DAMPING;
+
+  // Sleep threshold - stop micro-movements
+  if (Math.abs(block.vx) < SLEEP_THRESHOLD) block.vx = 0;
+  if (Math.abs(block.vy) < SLEEP_THRESHOLD) block.vy = 0;
+
+  // Velocity cap
+  if (Math.abs(block.vx) > MAX_VELOCITY) block.vx = Math.sign(block.vx) * MAX_VELOCITY;
+  if (Math.abs(block.vy) > MAX_VELOCITY) block.vy = Math.sign(block.vy) * MAX_VELOCITY;
 }
 
 export function constrainToWorld(block, worldWidth, worldHeight) {
@@ -198,68 +175,12 @@ export function constrainToWorld(block, worldWidth, worldHeight) {
   if (bounds.bottom > worldHeight) {
     block.y = worldHeight - block.height;
     block.vy = -Math.abs(block.vy) * block.bounciness;
-    // Apply ground friction
+    // Ground friction
     block.vx *= (1 - block.friction * 0.1);
   }
-  // Ceiling (optional, blocks can go above)
+  // Ceiling
   if (bounds.top < 0) {
     block.y = 0;
     block.vy = Math.abs(block.vy) * block.bounciness;
-  }
-}
-
-// Check if blockOnTop is resting on blockBelow
-export function isRestingOn(blockOnTop, blockBelow) {
-  const topBounds = getBounds(blockOnTop);
-  const belowBounds = getBounds(blockBelow);
-
-  // Check vertical alignment: top block's bottom should be at or just above below block's top
-  const verticalContact = Math.abs(topBounds.bottom - belowBounds.top) < 2;
-
-  // Check horizontal overlap
-  const horizontalOverlap =
-    topBounds.right > belowBounds.left + 1 &&
-    topBounds.left < belowBounds.right - 1;
-
-  return verticalContact && horizontalOverlap;
-}
-
-// Find all blocks resting on top of a given block
-export function getBlocksRestingOn(block, allBlocks) {
-  return allBlocks.filter(other =>
-    other.id !== block.id &&
-    !other.isStatic &&
-    !other.isDragging &&
-    isRestingOn(other, block)
-  );
-}
-
-// Apply drag friction: when a block is dragged, blocks on top move with it
-// Also sets velocity so blocks continue with inertia when drag stops
-export function applyDragFriction(draggedBlock, allBlocks, dx, dy, dt, visited = new Set()) {
-  if (visited.has(draggedBlock.id)) return;
-  visited.add(draggedBlock.id);
-
-  const blocksOnTop = getBlocksRestingOn(draggedBlock, allBlocks);
-
-  for (const block of blocksOnTop) {
-    const friction = getEffectiveFriction(draggedBlock, block);
-
-    // Move block based on friction (high friction = moves more with dragged block)
-    // Sticky blocks move 100% with the dragged block
-    const moveFactor = draggedBlock.sticky || block.sticky ? 1.0 : friction;
-
-    const effectiveDx = dx * moveFactor;
-    block.x += effectiveDx;
-    block.y += dy;
-
-    // Set velocity for inertia (when drag stops, block continues moving)
-    if (dt > 0) {
-      block.vx = effectiveDx / dt;
-      block.vy = dy / dt;
-    }
-
-    // Recursively apply to blocks on top of this one
-    applyDragFriction(block, allBlocks, effectiveDx, dy, dt, visited);
   }
 }

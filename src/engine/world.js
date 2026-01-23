@@ -1,5 +1,5 @@
 // World module - procedural style
-// Manages world state and simulation loop
+// All units in meters (SI)
 
 import { createBlock, blockToJSON, blockFromJSON } from './block.js';
 import {
@@ -9,19 +9,19 @@ import {
   resolveCollision,
   applyDamping,
   constrainToWorld,
-  applyDragFriction
 } from './physics.js';
+
+export const COLLISION_ITERATIONS = 4;
 
 export function createWorld(width, height) {
   return {
     width,
     height,
     blocks: [],
-    blockTemplates: [], // saved block configurations
+    blockTemplates: [],
     selectedBlockId: null,
     draggedBlockId: null,
     dragOffset: { x: 0, y: 0 },
-    lastDragTime: 0,
     paused: false,
   };
 }
@@ -35,10 +35,6 @@ export function removeBlock(world, blockId) {
   const index = world.blocks.findIndex(b => b.id === blockId);
   if (index !== -1) {
     world.blocks.splice(index, 1);
-    // Clean up stuckTo references
-    world.blocks.forEach(b => {
-      b.stuckTo = b.stuckTo.filter(id => id !== blockId);
-    });
     if (world.selectedBlockId === blockId) {
       world.selectedBlockId = null;
     }
@@ -53,7 +49,7 @@ export function getBlockById(world, blockId) {
 }
 
 export function getBlockAt(world, x, y) {
-  // Return topmost block at position (reverse order since later blocks are on top)
+  // Return topmost block at position (reverse order)
   for (let i = world.blocks.length - 1; i >= 0; i--) {
     const block = world.blocks[i];
     if (
@@ -81,32 +77,30 @@ export function startDrag(world, blockId, mouseX, mouseY) {
     x: mouseX - block.x,
     y: mouseY - block.y,
   };
-  world.lastDragTime = performance.now();
   block.isDragging = true;
   block.vx = 0;
   block.vy = 0;
 }
 
-export function updateDrag(world, mouseX, mouseY) {
+export function updateDrag(world, mouseX, mouseY, dt) {
   if (!world.draggedBlockId) return;
 
   const block = getBlockById(world, world.draggedBlockId);
   if (!block) return;
 
-  const now = performance.now();
-  const dt = (now - world.lastDragTime) / 1000; // convert to seconds
-  world.lastDragTime = now;
+  // Save old position
+  const oldX = block.x;
+  const oldY = block.y;
 
-  const newX = mouseX - world.dragOffset.x;
-  const newY = mouseY - world.dragOffset.y;
-  const dx = newX - block.x;
-  const dy = newY - block.y;
+  // Override position to follow mouse
+  block.x = mouseX - world.dragOffset.x;
+  block.y = mouseY - world.dragOffset.y;
 
-  block.x = newX;
-  block.y = newY;
-
-  // Apply friction to blocks resting on top (with velocity for inertia)
-  applyDragFriction(block, world.blocks, dx, dy, dt);
+  // Calculate implied velocity from movement
+  if (dt > 0) {
+    block.vx = (block.x - oldX) / dt;
+    block.vy = (block.y - oldY) / dt;
+  }
 }
 
 export function endDrag(world) {
@@ -115,6 +109,7 @@ export function endDrag(world) {
   const block = getBlockById(world, world.draggedBlockId);
   if (block) {
     block.isDragging = false;
+    // Block keeps its velocity and moves naturally
   }
   world.draggedBlockId = null;
 }
@@ -124,7 +119,7 @@ export function step(world, dt) {
 
   const blocks = world.blocks;
 
-  // Apply gravity to all blocks
+  // Apply gravity
   blocks.forEach(block => {
     applyGravity(block, dt);
   });
@@ -134,9 +129,8 @@ export function step(world, dt) {
     updatePosition(block, dt);
   });
 
-  // Check and resolve collisions (multiple iterations for stability)
-  const iterations = 4;
-  for (let iter = 0; iter < iterations; iter++) {
+  // Collision resolution (multiple iterations for stability)
+  for (let iter = 0; iter < COLLISION_ITERATIONS; iter++) {
     for (let i = 0; i < blocks.length; i++) {
       for (let j = i + 1; j < blocks.length; j++) {
         const collision = checkCollision(blocks[i], blocks[j]);
@@ -156,19 +150,6 @@ export function step(world, dt) {
   blocks.forEach(block => {
     applyDamping(block);
   });
-}
-
-export function getTowerHeight(world) {
-  if (world.blocks.length === 0) return 0;
-
-  let minY = world.height;
-  world.blocks.forEach(block => {
-    if (!block.isStatic && block.y < minY) {
-      minY = block.y;
-    }
-  });
-
-  return world.height - minY;
 }
 
 export function clearBlocks(world) {
