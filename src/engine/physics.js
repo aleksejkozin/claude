@@ -40,7 +40,7 @@ export function checkCollision(block1, block2) {
   return { overlapX, overlapY, dirX, dirY };
 }
 
-export function resolveCollision(block1, block2, collision) {
+export function resolveCollision(block1, block2, collision, dt = 0) {
   if (!collision) return;
   if (block1.isStatic && block2.isStatic) return;
 
@@ -57,7 +57,7 @@ export function resolveCollision(block1, block2, collision) {
   applyImpulse(block1, block2, dirX, dirY, separateOnX);
 
   // Step 3: Apply friction on the tangent axis (perpendicular to separation)
-  applyFriction(block1, block2, separateOnX);
+  applyFriction(block1, block2, separateOnX, dt);
 }
 
 function separateBlocks(block1, block2, overlapX, overlapY, dirX, dirY, separateOnX) {
@@ -130,7 +130,7 @@ function applyImpulse(block1, block2, dirX, dirY, separateOnX) {
   }
 }
 
-function applyFriction(block1, block2, separateOnX) {
+function applyFriction(block1, block2, separateOnX, dt) {
   const friction = getEffectiveFriction(block1, block2);
 
   // Friction acts on the tangent axis (perpendicular to collision)
@@ -168,9 +168,18 @@ function applyFriction(block1, block2, separateOnX) {
     } else if (canMove1) {
       // Only block1 can move - it gets full friction
       block1.vx -= relVx * friction;
+      // Position correction: when dragged block moves, carry the resting block
+      // This eliminates the one-frame delay that causes slippage
+      if (block2.isDragging && dt > 0) {
+        block1.x -= relVx * friction * dt;
+      }
     } else if (canMove2) {
       // Only block2 can move - it gets full friction
       block2.vx += relVx * friction;
+      // Position correction for dragged block
+      if (block1.isDragging && dt > 0) {
+        block2.x += relVx * friction * dt;
+      }
     }
   }
 }

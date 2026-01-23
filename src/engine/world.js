@@ -135,7 +135,7 @@ export function step(world, dt) {
       for (let j = i + 1; j < blocks.length; j++) {
         const collision = checkCollision(blocks[i], blocks[j]);
         if (collision) {
-          resolveCollision(blocks[i], blocks[j], collision);
+          resolveCollision(blocks[i], blocks[j], collision, dt);
         }
       }
     }

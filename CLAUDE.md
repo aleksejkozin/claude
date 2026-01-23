@@ -216,13 +216,14 @@ Applied tangent to collision (perpendicular to separation axis):
 2. Effective friction = average of both blocks: `(A.friction + B.friction) / 2`
 3. Apply friction impulse: `frictionImpulse = relVelTangent * effectiveFriction`
 4. Split 50/50 between both blocks
+5. **Position correction during drag**: When one block is being dragged, also apply position correction to the resting block to eliminate one-frame delay slippage
 
 | Friction Value | Behavior |
 |----------------|----------|
 | 0.0 | Frictionless (ice) |
 | 0.2 | Slippery |
 | 0.5 | Normal (default) |
-| 1.0 | Maximum grip |
+| 1.0 | Maximum grip (stacked block follows dragged block perfectly) |
 
 ### Dragging
 
