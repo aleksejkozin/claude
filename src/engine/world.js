@@ -1,7 +1,7 @@
 // World module - procedural style
 // All units in meters (SI)
 
-import { createBlock, blockToJSON, blockFromJSON } from './block.js';
+import { createBlock, blockToJSON, blockFromJSON, getBounds } from './block.js';
 import {
   applyGravity,
   updatePosition,
@@ -12,6 +12,7 @@ import {
 } from './physics.js';
 
 export const COLLISION_ITERATIONS = 4;
+const CONTACT_TOLERANCE = 0.05; // meters - how close blocks must be to count as "in contact"
 
 export function createWorld(width, height) {
   return {
@@ -22,6 +23,7 @@ export function createWorld(width, height) {
     selectedBlockId: null,
     draggedBlockId: null,
     dragOffset: { x: 0, y: 0 },
+    dragStack: [],
     paused: false,
   };
 }
@@ -77,9 +79,17 @@ export function startDrag(world, blockId, mouseX, mouseY) {
     x: mouseX - block.x,
     y: mouseY - block.y,
   };
+  world.dragStack = findStackAbove(world, block);
+
   block.isDragging = true;
   block.vx = 0;
   block.vy = 0;
+
+  for (const stackBlock of world.dragStack) {
+    stackBlock.isDragging = true;
+    stackBlock.vx = 0;
+    stackBlock.vy = 0;
+  }
 }
 
 export function updateDrag(world, mouseX, mouseY, dt) {
@@ -88,18 +98,27 @@ export function updateDrag(world, mouseX, mouseY, dt) {
   const block = getBlockById(world, world.draggedBlockId);
   if (!block) return;
 
-  // Save old position
   const oldX = block.x;
   const oldY = block.y;
 
-  // Override position to follow mouse
   block.x = mouseX - world.dragOffset.x;
   block.y = mouseY - world.dragOffset.y;
 
-  // Calculate implied velocity from movement
+  const deltaX = block.x - oldX;
+  const deltaY = block.y - oldY;
+
   if (dt > 0) {
-    block.vx = (block.x - oldX) / dt;
-    block.vy = (block.y - oldY) / dt;
+    block.vx = deltaX / dt;
+    block.vy = deltaY / dt;
+  }
+
+  for (const stackBlock of world.dragStack) {
+    stackBlock.x += deltaX;
+    stackBlock.y += deltaY;
+    if (dt > 0) {
+      stackBlock.vx = deltaX / dt;
+      stackBlock.vy = deltaY / dt;
+    }
   }
 }
 
@@ -109,9 +128,14 @@ export function endDrag(world) {
   const block = getBlockById(world, world.draggedBlockId);
   if (block) {
     block.isDragging = false;
-    // Block keeps its velocity and moves naturally
   }
+
+  for (const stackBlock of world.dragStack) {
+    stackBlock.isDragging = false;
+  }
+
   world.draggedBlockId = null;
+  world.dragStack = [];
 }
 
 export function step(world, dt) {
@@ -188,6 +212,38 @@ export function spawnFromTemplate(world, templateIndex, x, y) {
   const block = blockFromJSON(world.blockTemplates[templateIndex], x, y);
   addBlock(world, block);
   return block;
+}
+
+export function isBlockAbove(upper, lower) {
+  const upperBounds = getBounds(upper);
+  const lowerBounds = getBounds(lower);
+
+  const verticalContact = Math.abs(upperBounds.bottom - lowerBounds.top) < CONTACT_TOLERANCE;
+  const horizontalOverlap = upperBounds.right > lowerBounds.left && upperBounds.left < lowerBounds.right;
+
+  return verticalContact && horizontalOverlap;
+}
+
+export function findBlocksDirectlyAbove(world, block) {
+  return world.blocks.filter(other =>
+    other.id !== block.id &&
+    !other.isStatic &&
+    isBlockAbove(other, block)
+  );
+}
+
+export function findStackAbove(world, block, visited = new Set()) {
+  if (visited.has(block.id)) return [];
+  visited.add(block.id);
+
+  const directlyAbove = findBlocksDirectlyAbove(world, block);
+  const stack = [...directlyAbove];
+
+  for (const above of directlyAbove) {
+    stack.push(...findStackAbove(world, above, visited));
+  }
+
+  return stack;
 }
 
 export function exportWorldState(world) {

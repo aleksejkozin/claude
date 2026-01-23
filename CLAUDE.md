@@ -137,7 +137,7 @@ worldY = mouseY / PIXELS_PER_METER
   selectedBlockId: string | null,
   draggedBlockId: string | null,
   dragOffset: { x, y },    // mouse offset from block origin during drag (m)
-  lastDragTime: number,    // for calculating drag velocity
+  dragStack: Block[],      // blocks above dragged block (move together)
   paused: boolean,
 }
 ```
@@ -248,6 +248,23 @@ Applied tangent to collision (perpendicular to separation axis):
 | 0.2 | Slippery |
 | 0.5 | Normal (default) |
 | 1.0 | Maximum grip (stacked block follows dragged block perfectly) |
+
+### Contact Graph (Stack Detection)
+
+When dragging a block, the engine detects all blocks stacked above it and moves them together as a unit.
+
+**Detection algorithm:**
+- `isBlockAbove(upper, lower)`: checks if upper block is resting on lower block
+  - Vertical contact: `upper.bottom ≈ lower.top` (within CONTACT_TOLERANCE = 0.05m)
+  - Horizontal overlap: blocks share X range
+- `findStackAbove(world, block)`: recursively finds all blocks in the stack above
+
+**During drag:**
+1. `startDrag`: computes `dragStack = findStackAbove(world, block)`, marks all as `isDragging`
+2. `updateDrag`: moves dragged block, applies same delta to entire stack
+3. `endDrag`: releases all blocks, clears `dragStack`
+
+This eliminates the 1-frame-per-layer lag that caused stacks to slip during fast drags.
 
 ### Dragging
 

@@ -50,6 +50,9 @@ import {
   endDrag,
   step,
   clearBlocks,
+  isBlockAbove,
+  findBlocksDirectlyAbove,
+  findStackAbove,
 } from '../engine/world.js';
 
 test('createBlock creates block with default values', () => {
@@ -460,5 +463,59 @@ test('full game cycle: drop block, drag base, top stays stacked', () => {
   assertFollowedHorizontally(top, base, topStartX, baseStartX, 0.2);
   assertStacked(top, base);
   assertApprox(top.y, topStartY, 0.15);
+});
+
+test('isBlockAbove detects stacked blocks', () => {
+  const bottom = createBlock({ x: 1, y: 2, width: 0.5, height: 0.5 });
+  const top = createBlock({ x: 1, y: 1.5, width: 0.5, height: 0.5 });
+  assertTrue(isBlockAbove(top, bottom));
+});
+
+test('isBlockAbove rejects non-touching blocks', () => {
+  const bottom = createBlock({ x: 1, y: 2, width: 0.5, height: 0.5 });
+  const top = createBlock({ x: 1, y: 1, width: 0.5, height: 0.5 });
+  assertFalse(isBlockAbove(top, bottom));
+});
+
+test('isBlockAbove rejects horizontally separated blocks', () => {
+  const bottom = createBlock({ x: 1, y: 2, width: 0.5, height: 0.5 });
+  const top = createBlock({ x: 3, y: 1.5, width: 0.5, height: 0.5 });
+  assertFalse(isBlockAbove(top, bottom));
+});
+
+test('findStackAbove finds multi-layer stack', () => {
+  const world = createWorld(4, 4);
+  const base = createBlock({ x: 1, y: 3, width: 0.5, height: 0.5 });
+  const mid = createBlock({ x: 1, y: 2.5, width: 0.5, height: 0.5 });
+  const top = createBlock({ x: 1, y: 2, width: 0.5, height: 0.5 });
+  addBlock(world, base);
+  addBlock(world, mid);
+  addBlock(world, top);
+
+  const stack = findStackAbove(world, base);
+  assertEqual(stack.length, 2);
+  assertTrue(stack.includes(mid));
+  assertTrue(stack.includes(top));
+});
+
+test('dragging base moves entire stack together', () => {
+  const world = createWorld(4, 4);
+  const base = createBlock({ x: 1, y: 3, width: 0.5, height: 0.5 });
+  const mid = createBlock({ x: 1, y: 2.5, width: 0.5, height: 0.5 });
+  const top = createBlock({ x: 1, y: 2, width: 0.5, height: 0.5 });
+  addBlock(world, base);
+  addBlock(world, mid);
+  addBlock(world, top);
+
+  const baseStartX = base.x;
+  const midStartX = mid.x;
+  const topStartX = top.x;
+
+  startDrag(world, base.id, base.x + 0.25, base.y + 0.25);
+  updateDrag(world, base.x + 0.25 + 1.0, base.y + 0.25, 0.016);
+
+  assertApprox(base.x - baseStartX, 1.0, 0.01);
+  assertApprox(mid.x - midStartX, 1.0, 0.01);
+  assertApprox(top.x - topStartX, 1.0, 0.01);
 });
 
