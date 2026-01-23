@@ -39,8 +39,31 @@ The codebase follows a strict separation between engine logic and rendering:
 
 ## Physics Engine Specification
 
-- The drag system should be impulse controlled. Like, dragged mouse should prove physical impulse and not just glue a box to the cursor
-- Let's use metric system. 9.8 for gravity, meters for sizes, kg for mass etc
+**Units: Metric System (SI)**
+
+The physics engine uses real-world units internally. Only the renderer converts to pixels.
+
+| Quantity | Unit | Example |
+|----------|------|---------|
+| Position | meters | x = 2.5 m |
+| Velocity | m/s | vx = 1.2 m/s |
+| Mass | kg | mass = 2 kg |
+| Gravity | m/s² | 9.8 m/s² |
+| Size | meters | width = 0.5 m |
+
+**Conversion constant:** `PIXELS_PER_METER = 100` (1 meter = 100 pixels on screen)
+
+**Renderer converts to pixels:**
+```
+screenX = block.x * PIXELS_PER_METER
+screenY = block.y * PIXELS_PER_METER
+```
+
+**Input converts to meters:**
+```
+worldX = mouseX / PIXELS_PER_METER
+worldY = mouseY / PIXELS_PER_METER
+```
 
 ### Block Data Shape
 ```javascript
@@ -48,20 +71,20 @@ The codebase follows a strict separation between engine logic and rendering:
   // Identity
   id: string,              // e.g. "block_1", auto-generated
 
-  // Geometry
-  x: number,               // left edge position (pixels)
-  y: number,               // top edge position (pixels)
-  width: number,           // default 50
-  height: number,          // default 50
+  // Geometry (meters)
+  x: number,               // left edge position (m)
+  y: number,               // top edge position (m)
+  width: number,           // default 0.5 m
+  height: number,          // default 0.5 m
 
   // Physical Properties
-  mass: number,            // default 1, affects impulse distribution
+  mass: number,            // kg, default 1
   friction: number,        // 0-1, default 0.5, affects sliding
   bounciness: number,      // 0-1, default 0.2, coefficient of restitution
 
-  // Velocity State
-  vx: number,              // horizontal velocity (pixels/second)
-  vy: number,              // vertical velocity (pixels/second)
+  // Velocity State (m/s)
+  vx: number,              // horizontal velocity (m/s)
+  vy: number,              // vertical velocity (m/s)
 
   // Flags
   isStatic: boolean,       // if true, block never moves (ground/walls)
@@ -72,13 +95,13 @@ The codebase follows a strict separation between engine logic and rendering:
 ### World Data Shape
 ```javascript
 {
-  width: number,           // world width in pixels
-  height: number,          // world height in pixels
+  width: number,           // world width (m)
+  height: number,          // world height (m)
   blocks: Block[],         // all blocks in simulation
   blockTemplates: object[],// saved block configurations for spawning
   selectedBlockId: string | null,
   draggedBlockId: string | null,
-  dragOffset: { x, y },    // mouse offset from block origin during drag
+  dragOffset: { x, y },    // mouse offset from block origin during drag (m)
   lastDragTime: number,    // for calculating drag velocity
   paused: boolean,
 }
@@ -88,7 +111,7 @@ The codebase follows a strict separation between engine logic and rendering:
 
 Each frame, with timestep `dt` (seconds):
 
-1. **Apply Gravity**: Each non-static, non-dragging block gets `vy += 980 * dt`
+1. **Apply Gravity**: Each non-static, non-dragging block gets `vy += 9.8 * dt`
 2. **Update Positions**: `x += vx * dt`, `y += vy * dt`
 3. **Collision Resolution** (4 iterations for stability):
    - Check every pair of blocks for AABB overlap
@@ -212,8 +235,9 @@ When you drag a block, blocks resting on top should move with it:
 
 ### Constants
 
-- `GRAVITY = 980` pixels/second² (roughly 1g if 100px = 1m)
-- `DAMPING = 0.99` per frame
-- `COLLISION_ITERATIONS = 4`
-- `SEPARATION_SLOP = 0.01` pixels (prevents jitter)
+- `PIXELS_PER_METER = 100` — conversion factor for rendering
+- `GRAVITY = 9.8` m/s² — Earth gravity
+- `DAMPING = 0.99` per frame — velocity decay
+- `COLLISION_ITERATIONS = 4` — solver iterations for stability
+- `SEPARATION_SLOP = 0.0001` m (0.01 mm) — prevents jitter
 
