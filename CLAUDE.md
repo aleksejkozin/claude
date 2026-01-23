@@ -16,12 +16,18 @@ Tower Builder is a physics-based tower building game where players drag and drop
 **Run the game:** Open `index.html` in a browser (no build step required).
 **Run tests:** Open `test.html` in a browser. Tests run automatically and display results.
 
+### Bug Fixing Workflow
+When fixing bugs:
+1. **Write a unit test first** that reproduces the bug
+2. **Prove the test covers the bug** (test should fail before the fix)
+3. **Then fix the code** and verify the test passes
+
 ## Architecture
 The codebase follows a strict separation between engine logic and rendering:
 
 ### Engine (`src/engine/`) - Pure Logic, No DOM
 - **block.js**: Block creation and property functions. Blocks are plain objects with physics state (position, velocity) and properties (mass, friction, bounciness).
-- **physics.js**: Gravity, collision detection/resolution, friction, damping, world constraints. Key function `applyDragFriction` handles blocks moving with dragged blocks based on friction.
+- **physics.js**: Gravity, collision detection/resolution, friction, damping, world constraints. Collision friction transfers momentum between blocks (including during drag).
 - **world.js**: World state management, block CRUD, drag handling, simulation step loop. The `step()` function runs 4 collision resolution iterations for stability.
 
 ### Renderer (`src/renderer/`) - Drawing Only
