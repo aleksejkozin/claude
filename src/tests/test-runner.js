@@ -56,6 +56,68 @@ export function assertNull(value, message = '') {
   }
 }
 
+export function assertAbove(top, bottom, tolerance = 0.1) {
+  const topBottom = top.y + top.height;
+  const bottomTop = bottom.y;
+  if (topBottom > bottomTop + tolerance) {
+    throw new Error(`Block not above: top.bottom=${topBottom.toFixed(3)}, bottom.top=${bottomTop.toFixed(3)}`);
+  }
+}
+
+export function assertStacked(top, bottom, tolerance = 0.1) {
+  const topBottom = top.y + top.height;
+  const bottomTop = bottom.y;
+  const gap = Math.abs(topBottom - bottomTop);
+  if (gap > tolerance) {
+    throw new Error(`Blocks not stacked: gap=${gap.toFixed(3)}m (tolerance=${tolerance})`);
+  }
+}
+
+export function assertNoHorizontalSlip(block, originalX, tolerance = 0.01) {
+  const drift = Math.abs(block.x - originalX);
+  if (drift > tolerance) {
+    throw new Error(`Horizontal slip: moved ${drift.toFixed(3)}m from x=${originalX}`);
+  }
+}
+
+export function assertFollowedHorizontally(follower, leader, followerStartX, leaderStartX, tolerance = 0.1) {
+  const leaderMovement = leader.x - leaderStartX;
+  const followerMovement = follower.x - followerStartX;
+  const slippage = Math.abs(leaderMovement - followerMovement);
+  if (slippage > tolerance) {
+    throw new Error(`Follower slipped: leader moved ${leaderMovement.toFixed(3)}m, follower moved ${followerMovement.toFixed(3)}m, slippage=${slippage.toFixed(3)}m`);
+  }
+}
+
+export function assertMovedRight(block, originalX, minDistance = 0) {
+  const movement = block.x - originalX;
+  if (movement <= minDistance) {
+    throw new Error(`Expected rightward movement > ${minDistance}m, got ${movement.toFixed(3)}m`);
+  }
+}
+
+export function assertBounced(block) {
+  if (block.vy >= 0) {
+    throw new Error(`Expected upward velocity (bounce), got vy=${block.vy.toFixed(3)}`);
+  }
+}
+
+export function assertSettled(block, velocityThreshold = 1) {
+  if (Math.abs(block.vx) > velocityThreshold || Math.abs(block.vy) > velocityThreshold) {
+    throw new Error(`Block not settled: vx=${block.vx.toFixed(3)}, vy=${block.vy.toFixed(3)}`);
+  }
+}
+
+export function assertNoOverlap(block1, block2) {
+  const b1 = { left: block1.x, right: block1.x + block1.width, top: block1.y, bottom: block1.y + block1.height };
+  const b2 = { left: block2.x, right: block2.x + block2.width, top: block2.y, bottom: block2.y + block2.height };
+  const overlapX = Math.min(b1.right, b2.right) - Math.max(b1.left, b2.left);
+  const overlapY = Math.min(b1.bottom, b2.bottom) - Math.max(b1.top, b2.top);
+  if (overlapX > 0 && overlapY > 0) {
+    throw new Error(`Blocks overlap: overlapX=${overlapX.toFixed(3)}, overlapY=${overlapY.toFixed(3)}`);
+  }
+}
+
 export function getResults() {
   return results;
 }

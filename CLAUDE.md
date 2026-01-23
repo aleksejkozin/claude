@@ -21,6 +21,30 @@ Tower Builder is a physics-based tower building game where players drag and drop
 - **Run tests before pushing** - verify all tests pass
 - Tests run in browser (`test.html`) or via node: `node --experimental-vm-modules src/tests/engine.test.js`
 
+### Test Readability
+Tests should be readable without running the code. Use semantic assertions that express intent:
+
+**Good - domain assertions that hide coordinate math:**
+```javascript
+assertStacked(top, bottom)      // top block resting on bottom
+assertAbove(top, bottom)        // top is above bottom
+assertBounced(block)            // block has upward velocity
+assertFollowedHorizontally(follower, leader, startX1, startX2)
+assertNoOverlap(block1, block2)
+```
+
+**Bad - raw coordinate checks require mental parsing:**
+```javascript
+assertTrue(block1.y + block1.height < block2.y + 0.1)  // what does this mean?
+assertApprox(block.y, 2.45, 0.01)  // magic numbers
+```
+
+**Rules:**
+- Function names should express invariants, not implementation
+- No comments explaining assertions - the assertion name should be self-documenting
+- Simple comparisons like `assertTrue(x < y)` are fine when obvious
+- Don't wrap simple operators (`assertLess`, `assertGreater`) - just use `assertTrue(a < b)`
+
 ### Bug Fixing Workflow
 When fixing bugs:
 1. **Write a unit test first** that reproduces the bug
