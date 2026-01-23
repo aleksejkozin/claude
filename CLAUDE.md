@@ -16,6 +16,11 @@ Tower Builder is a physics-based tower building game where players drag and drop
 **Run the game:** Open `index.html` in a browser (no build step required).
 **Run tests:** Open `test.html` in a browser. Tests run automatically and display results.
 
+### Testing Policy
+- **Every feature must have at least 1 test**
+- **Run tests before pushing** - verify all tests pass
+- Tests run in browser (`test.html`) or via node: `node --experimental-vm-modules src/tests/engine.test.js`
+
 ### Bug Fixing Workflow
 When fixing bugs:
 1. **Write a unit test first** that reproduces the bug
