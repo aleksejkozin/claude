@@ -6,6 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - All design decisions should be documented here. No code should exist if it is not liked to this document. If such code exests it should be removed or this document should be updated to include
 - Basically, this is the main source of truth, the code is secondary
 - Here we also describe the data types/object shapes. We do not use types script but I would like to see data descriptions and validate them
+- The project should not contain unused code, files, or descriptions
 
 ## Project Overview
 
@@ -38,6 +39,9 @@ The codebase follows a strict separation between engine logic and rendering:
 
 ## Physics Engine Specification
 
+- The drag system should be impulse controlled. Like, dragged mouse should prove physical impulse and not just glue a box to the cursor
+- Let's use metric system. 9.8 for gravity, meters for sizes, kg for mass etc
+
 ### Block Data Shape
 ```javascript
 {
@@ -55,24 +59,13 @@ The codebase follows a strict separation between engine logic and rendering:
   friction: number,        // 0-1, default 0.5, affects sliding
   bounciness: number,      // 0-1, default 0.2, coefficient of restitution
 
-  // Special Properties
-  sticky: boolean,         // if true, blocks stick together on contact
-  slippery: boolean,       // if true, friction is reduced by 80%
-
   // Velocity State
   vx: number,              // horizontal velocity (pixels/second)
   vy: number,              // vertical velocity (pixels/second)
 
-  // Rotation (not currently used in physics)
-  rotation: number,
-  angularVelocity: number,
-
   // Flags
   isStatic: boolean,       // if true, block never moves (ground/walls)
   isDragging: boolean,     // if true, block follows mouse, ignores physics
-
-  // Sticky system
-  stuckTo: string[],       // array of block IDs this block is stuck to
 }
 ```
 
