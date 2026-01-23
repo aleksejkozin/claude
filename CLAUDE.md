@@ -20,12 +20,12 @@ Tower Builder is a physics-based tower building game where players drag and drop
 The codebase follows a strict separation between engine logic and rendering:
 
 ### Engine (`src/engine/`) - Pure Logic, No DOM
-- **block.js**: Block creation and property functions. Blocks are plain objects with physics state (position, velocity) and properties (mass, friction, bounciness, sticky, slippery).
+- **block.js**: Block creation and property functions. Blocks are plain objects with physics state (position, velocity) and properties (mass, friction, bounciness).
 - **physics.js**: Gravity, collision detection/resolution, friction, damping, world constraints. Key function `applyDragFriction` handles blocks moving with dragged blocks based on friction.
 - **world.js**: World state management, block CRUD, drag handling, simulation step loop. The `step()` function runs 4 collision resolution iterations for stability.
 
 ### Renderer (`src/renderer/`) - Drawing Only
-- **canvas.js**: Canvas rendering functions. Takes world state, draws blocks with color coding based on properties (mass affects hue, sticky/slippery/bouncy shown as colored dots).
+- **canvas.js**: Canvas rendering functions. Takes world state, draws blocks with color coding based on properties (mass affects hue, friction/bounciness shown visually).
 
 ### Game (`src/game/`)
 - **dev-mode.js**: Dev UI, input handling, game loop. Initializes world/renderer, handles mouse/touch events, connects DOM controls to engine.
@@ -217,21 +217,26 @@ With `bounciness ≤ 1`, energy can only stay same or decrease, never increase.
 
 ### Friction
 
-Applied tangent to collision (perpendicular to normal):
+Applied tangent to collision (perpendicular to separation axis):
 
 1. Calculate relative velocity along tangent
-2. Effective friction = average of both blocks (or 20% if either is slippery)
-3. Apply friction impulse: `frictionImpulse = relVelTangent * friction`
+2. Effective friction = average of both blocks: `(A.friction + B.friction) / 2`
+3. Apply friction impulse: `frictionImpulse = relVelTangent * effectiveFriction`
 4. Split 50/50 between both blocks
+
+| Friction Value | Behavior |
+|----------------|----------|
+| 0.0 | Frictionless (ice) |
+| 0.2 | Slippery |
+| 0.5 | Normal (default) |
+| 1.0 | Maximum grip |
 
 ### Drag Friction (blocks moving with dragged block)
 
 When you drag a block, blocks resting on top should move with it:
 
 1. Find all blocks whose bottom touches dragged block's top
-2. Move each by `dx * moveFactor` where:
-   - `moveFactor = 1.0` if either block is sticky
-   - `moveFactor = friction` otherwise
+2. Move each by `dx * moveFactor` where `moveFactor = (A.friction + B.friction) / 2`
 3. Set velocity for inertia when drag ends: `vx = effectiveDx / dt`
 4. Recursively apply to blocks stacked higher
 
