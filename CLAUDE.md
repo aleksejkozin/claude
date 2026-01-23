@@ -141,19 +141,25 @@ dirY = sign(A.centerY - B.centerY)   // +1 if A is below B, -1 if above
 
 **Step 3: Separate on each axis**
 
-Push blocks apart proportional to inverse mass:
+Simple rules - no mass weighting for position:
 
 ```
-totalInvMass = 1/m1 + 1/m2
-
-A.x += dirX * overlapX * (1/m1) / totalInvMass
-B.x -= dirX * overlapX * (1/m2) / totalInvMass
-
-A.y += dirY * overlapY * (1/m1) / totalInvMass
-B.y -= dirY * overlapY * (1/m2) / totalInvMass
+if (A.isStatic) {
+    B.x -= dirX * overlapX
+    B.y -= dirY * overlapY
+} else if (B.isStatic) {
+    A.x += dirX * overlapX
+    A.y += dirY * overlapY
+} else {
+    // Both dynamic: split 50/50
+    A.x += dirX * overlapX * 0.5
+    A.y += dirY * overlapY * 0.5
+    B.x -= dirX * overlapX * 0.5
+    B.y -= dirY * overlapY * 0.5
+}
 ```
 
-Static blocks have `1/m = 0`, so they don't move.
+Floating point errors may leave micro-overlaps, but at 100 px/m they're invisible (0.0001m = 0.01 pixels).
 
 **Step 4: Apply impulse on each axis (1D collision formula)**
 
@@ -240,11 +246,10 @@ When you drag a block, blocks resting on top should move with it:
 
 ### Constants
 
-- `PIXELS_PER_METER = 100` — conversion factor for rendering
+- `PIXELS_PER_METER = 100` — conversion factor for rendering (hides micro-errors)
 - `GRAVITY = 9.8` m/s² — Earth gravity
 - `DAMPING = 0.99` per frame — velocity decay (prevents energy accumulation)
 - `COLLISION_ITERATIONS = 4` — solver iterations for stability
-- `SEPARATION_SLOP = 0.0001` m (0.01 mm) — prevents jitter
 - `SLEEP_THRESHOLD = 0.001` m/s — velocities below this become zero
 - `MAX_VELOCITY = 100` m/s — hard cap prevents runaway speeds
 
