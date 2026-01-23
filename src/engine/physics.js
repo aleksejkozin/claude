@@ -35,50 +35,28 @@ export function checkCollision(block1, block2) {
   const overlapTop = b1.bottom - b2.top;
   const overlapBottom = b2.bottom - b1.top;
 
-  // Find minimum overlap to determine collision normal
   const minOverlapX = Math.min(overlapLeft, overlapRight);
   const minOverlapY = Math.min(overlapTop, overlapBottom);
 
-  let normal, penetration;
+  // Always use center-to-center normal - works for both edge and corner collisions
+  const center1x = block1.x + block1.width / 2;
+  const center1y = block1.y + block1.height / 2;
+  const center2x = block2.x + block2.width / 2;
+  const center2y = block2.y + block2.height / 2;
 
-  // Check if this is a corner collision (overlaps are similar)
-  // If ratio is close to 1, both axes have similar penetration → corner
-  const ratio = minOverlapX / minOverlapY;
-  const isCornerCollision = ratio > 0.5 && ratio < 2.0;
+  const dx = center1x - center2x;
+  const dy = center1y - center2y;
+  const length = Math.sqrt(dx * dx + dy * dy);
 
-  if (isCornerCollision) {
-    // Corner collision: use diagonal normal (center to center)
-    const center1x = block1.x + block1.width / 2;
-    const center1y = block1.y + block1.height / 2;
-    const center2x = block2.x + block2.width / 2;
-    const center2y = block2.y + block2.height / 2;
-
-    const dx = center1x - center2x;
-    const dy = center1y - center2y;
-    const length = Math.sqrt(dx * dx + dy * dy);
-
-    if (length > 0) {
-      normal = { x: dx / length, y: dy / length };
-    } else {
-      // Blocks perfectly overlapping, fallback to vertical
-      normal = { x: 0, y: -1 };
-    }
-
-    // Penetration along diagonal: project overlap onto normal direction
-    penetration = Math.min(minOverlapX, minOverlapY);
-  } else if (minOverlapX < minOverlapY) {
-    // Edge collision: horizontal
-    penetration = minOverlapX;
-    normal = overlapLeft < overlapRight
-      ? { x: -1, y: 0 }  // block1 is to the right
-      : { x: 1, y: 0 };  // block1 is to the left
+  let normal;
+  if (length > 0) {
+    normal = { x: dx / length, y: dy / length };
   } else {
-    // Edge collision: vertical
-    penetration = minOverlapY;
-    normal = overlapTop < overlapBottom
-      ? { x: 0, y: -1 }  // block1 is below
-      : { x: 0, y: 1 };  // block1 is above
+    // Blocks perfectly overlapping, fallback to vertical
+    normal = { x: 0, y: -1 };
   }
+
+  const penetration = Math.min(minOverlapX, minOverlapY);
 
   return { normal, penetration };
 }
