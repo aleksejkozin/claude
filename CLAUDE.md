@@ -260,22 +260,27 @@ Functions to detect which blocks are in contact (for future use in friction/impu
 
 Currently used for detection only. Friction still drives physics - blocks are NOT rigidly attached during drag. Fast movements can cause blocks to slip or fly off due to inertia.
 
-### Dragging
+### Dragging (Spring-Based)
 
-A dragged block follows the mouse but still participates in physics:
+Dragging uses a spring force - no special physics exceptions:
 
-**Position:** Controlled by mouse (block teleports to cursor)
-**Velocity:** Derived from mouse movement speed
-**Collisions:** Dragged block acts like infinite mass:
-- Pushes other blocks away (separation)
-- Applies impulse to other blocks (they bounce off)
-- Applies friction to other blocks (they get dragged along)
-- But dragged block itself is not affected (mouse wins)
+```
+force = (mousePos - blockPos) * STIFFNESS - velocity * DAMPING
+force = clamp(force, MAX_FORCE)
+velocity += force * dt
+```
 
-This means:
-- Dragging into a stack pushes it
-- Dragging up quickly can make stacked blocks fly off (inertia)
-- Heavy stacks still resist via friction, but mouse always wins position
+**Constants:**
+- `DRAG_STIFFNESS = 50` — how strongly block pulls toward mouse
+- `DRAG_DAMPING = 10` — prevents oscillation
+- `DRAG_MAX_FORCE = 100` — prevents explosive forces
+
+**Behavior:**
+- Block accelerates toward mouse (not teleport)
+- Collisions push the dragged block back (mouse doesn't win)
+- Heavy stacks resist more
+- Quick movements can fail to move heavy objects
+- Blocks never overlap (collision separation always applies)
 
 ### Mass Effects Summary
 

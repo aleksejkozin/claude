@@ -10,12 +10,12 @@ export const SLEEP_THRESHOLD = 0.001; // m/s
 export const MAX_VELOCITY = 100;      // m/s
 
 export function applyGravity(block, dt) {
-  if (block.isStatic || block.isDragging) return;
+  if (block.isStatic) return;
   block.vy += GRAVITY * dt;
 }
 
 export function updatePosition(block, dt) {
-  if (block.isStatic || block.isDragging) return;
+  if (block.isStatic) return;
   block.x += block.vx * dt;
   block.y += block.vy * dt;
 }
@@ -64,18 +64,15 @@ function separateBlocks(block1, block2, overlapX, overlapY, dirX, dirY, separate
   const overlap = separateOnX ? overlapX : overlapY;
   const dir = separateOnX ? dirX : dirY;
 
-  const fixed1 = block1.isStatic || block1.isDragging;
-  const fixed2 = block2.isStatic || block2.isDragging;
-
-  if (fixed1 && fixed2) {
+  if (block1.isStatic && block2.isStatic) {
     return;
-  } else if (fixed1) {
+  } else if (block1.isStatic) {
     if (separateOnX) {
       block2.x -= dir * overlap;
     } else {
       block2.y -= dir * overlap;
     }
-  } else if (fixed2) {
+  } else if (block2.isStatic) {
     if (separateOnX) {
       block1.x += dir * overlap;
     } else {
@@ -95,11 +92,8 @@ function separateBlocks(block1, block2, overlapX, overlapY, dirX, dirY, separate
 function applyImpulse(block1, block2, dirX, dirY, separateOnX) {
   const bounciness = getEffectiveBounciness(block1, block2);
 
-  const fixed1 = block1.isStatic || block1.isDragging;
-  const fixed2 = block2.isStatic || block2.isDragging;
-
-  const invMass1 = fixed1 ? 0 : 1 / block1.mass;
-  const invMass2 = fixed2 ? 0 : 1 / block2.mass;
+  const invMass1 = block1.isStatic ? 0 : 1 / block1.mass;
+  const invMass2 = block2.isStatic ? 0 : 1 / block2.mass;
   const totalInvMass = invMass1 + invMass2;
 
   if (totalInvMass === 0) return;
@@ -110,10 +104,10 @@ function applyImpulse(block1, block2, dirX, dirY, separateOnX) {
 
     if (approaching) {
       const j = -(1 + bounciness) * relVx / totalInvMass;
-      if (!fixed1) {
+      if (!block1.isStatic) {
         block1.vx += j * invMass1;
       }
-      if (!fixed2) {
+      if (!block2.isStatic) {
         block2.vx -= j * invMass2;
       }
     }
@@ -123,10 +117,10 @@ function applyImpulse(block1, block2, dirX, dirY, separateOnX) {
 
     if (approaching) {
       const j = -(1 + bounciness) * relVy / totalInvMass;
-      if (!fixed1) {
+      if (!block1.isStatic) {
         block1.vy += j * invMass1;
       }
-      if (!fixed2) {
+      if (!block2.isStatic) {
         block2.vy -= j * invMass2;
       }
     }
@@ -136,8 +130,8 @@ function applyImpulse(block1, block2, dirX, dirY, separateOnX) {
 function applyFriction(block1, block2, separateOnX, dt) {
   const friction = getEffectiveFriction(block1, block2);
 
-  const canMove1 = !block1.isStatic && !block1.isDragging;
-  const canMove2 = !block2.isStatic && !block2.isDragging;
+  const canMove1 = !block1.isStatic;
+  const canMove2 = !block2.isStatic;
 
   if (separateOnX) {
     const relVy = block1.vy - block2.vy;
@@ -167,16 +161,14 @@ function applyFriction(block1, block2, separateOnX, dt) {
 }
 
 export function applyDamping(block) {
-  if (block.isStatic || block.isDragging) return;
+  if (block.isStatic) return;
 
   block.vx *= DAMPING;
   block.vy *= DAMPING;
 
-  // Sleep threshold - stop micro-movements
   if (Math.abs(block.vx) < SLEEP_THRESHOLD) block.vx = 0;
   if (Math.abs(block.vy) < SLEEP_THRESHOLD) block.vy = 0;
 
-  // Velocity cap
   if (Math.abs(block.vx) > MAX_VELOCITY) block.vx = Math.sign(block.vx) * MAX_VELOCITY;
   if (Math.abs(block.vy) > MAX_VELOCITY) block.vy = Math.sign(block.vy) * MAX_VELOCITY;
 }

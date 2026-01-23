@@ -84,22 +84,30 @@ export function startDrag(world, blockId, mouseX, mouseY) {
   block.vy = 0;
 }
 
+const DRAG_STIFFNESS = 50;
+const DRAG_DAMPING = 10;
+const DRAG_MAX_FORCE = 100;
+
 export function updateDrag(world, mouseX, mouseY, dt) {
   if (!world.draggedBlockId) return;
 
   const block = getBlockById(world, world.draggedBlockId);
   if (!block) return;
 
-  const oldX = block.x;
-  const oldY = block.y;
+  const targetX = mouseX - world.dragOffset.x;
+  const targetY = mouseY - world.dragOffset.y;
 
-  block.x = mouseX - world.dragOffset.x;
-  block.y = mouseY - world.dragOffset.y;
+  let fx = (targetX - block.x) * DRAG_STIFFNESS - block.vx * DRAG_DAMPING;
+  let fy = (targetY - block.y) * DRAG_STIFFNESS - block.vy * DRAG_DAMPING;
 
-  if (dt > 0) {
-    block.vx = (block.x - oldX) / dt;
-    block.vy = (block.y - oldY) / dt;
+  const forceMag = Math.sqrt(fx * fx + fy * fy);
+  if (forceMag > DRAG_MAX_FORCE) {
+    fx = fx / forceMag * DRAG_MAX_FORCE;
+    fy = fy / forceMag * DRAG_MAX_FORCE;
   }
+
+  block.vx += fx * dt;
+  block.vy += fy * dt;
 }
 
 export function endDrag(world) {

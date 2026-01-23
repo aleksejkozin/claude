@@ -158,11 +158,11 @@ test('applyGravity does nothing to static blocks', () => {
   assertEqual(block.vy, 0);
 });
 
-test('applyGravity does nothing to dragging blocks', () => {
+test('applyGravity affects dragging blocks (spring counters it)', () => {
   const block = createBlock();
   block.isDragging = true;
   applyGravity(block, 0.1);
-  assertEqual(block.vy, 0);
+  assertApprox(block.vy, GRAVITY * 0.1, 0.01);
 });
 
 test('updatePosition moves block by velocity', () => {
@@ -295,23 +295,22 @@ test('startDrag begins dragging block', () => {
   assertTrue(block.isDragging);
 });
 
-test('updateDrag moves dragged block', () => {
+test('updateDrag applies spring force toward mouse', () => {
   const world = createWorld(4, 6);
   const block = createBlock({ x: 1, y: 1, width: 0.5, height: 0.5 });
   addBlock(world, block);
   startDrag(world, block.id, 1.25, 1.25);
-  updateDrag(world, 2, 2, 0.016);
-  assertApprox(block.x, 1.75, 0.01); // 2 - offset(0.25)
-  assertApprox(block.y, 1.75, 0.01);
+  updateDrag(world, 2.25, 1.25, 0.016);
+  assertTrue(block.vx > 0);
 });
 
-test('updateDrag calculates velocity from movement', () => {
+test('updateDrag spring force is limited', () => {
   const world = createWorld(4, 6);
   const block = createBlock({ x: 1, y: 1, width: 0.5, height: 0.5 });
   addBlock(world, block);
   startDrag(world, block.id, 1.25, 1.25);
-  updateDrag(world, 2.25, 1.25, 0.1); // move 1m right in 0.1s
-  assertApprox(block.vx, 10, 0.1); // 1m / 0.1s = 10 m/s
+  updateDrag(world, 100, 1.25, 0.016);
+  assertTrue(block.vx < 10);
 });
 
 test('endDrag stops dragging', () => {
@@ -398,16 +397,16 @@ test('vertical collision separates on Y axis only', () => {
   assertSettled(bottom);
 });
 
-test('friction=1 transfers full velocity to resting block', () => {
+test('friction=1 equalizes velocity between blocks', () => {
   const bottom = createBlock({ x: 1, y: 3, width: 0.5, height: 0.5, friction: 1.0, vx: 5 });
-  bottom.isDragging = true;
   const top = createBlock({ x: 1, y: 2.55, width: 0.5, height: 0.5, friction: 1.0 });
 
   const collision = checkCollision(top, bottom);
   assertNotNull(collision);
   resolveCollision(top, bottom, collision);
 
-  assertApprox(top.vx, 5, 0.1);
+  assertApprox(top.vx, 2.5, 0.1);
+  assertApprox(bottom.vx, 2.5, 0.1);
 });
 
 test('stacked block follows dragged block with friction=1', () => {
