@@ -498,24 +498,19 @@ test('findStackAbove finds multi-layer stack', () => {
   assertTrue(stack.includes(top));
 });
 
-test('dragging base moves entire stack together', () => {
+test('dragging base lets physics move stack via friction', () => {
   const world = createWorld(4, 4);
-  const base = createBlock({ x: 1, y: 3, width: 0.5, height: 0.5 });
-  const mid = createBlock({ x: 1, y: 2.5, width: 0.5, height: 0.5 });
-  const top = createBlock({ x: 1, y: 2, width: 0.5, height: 0.5 });
+  const base = createBlock({ x: 1, y: 3, width: 0.5, height: 0.5, friction: 1.0 });
+  const top = createBlock({ x: 1, y: 2.52, width: 0.5, height: 0.5, friction: 1.0 });
   addBlock(world, base);
-  addBlock(world, mid);
   addBlock(world, top);
 
-  const baseStartX = base.x;
-  const midStartX = mid.x;
-  const topStartX = top.x;
-
   startDrag(world, base.id, base.x + 0.25, base.y + 0.25);
-  updateDrag(world, base.x + 0.25 + 1.0, base.y + 0.25, 0.016);
+  for (let i = 0; i < 5; i++) {
+    updateDrag(world, base.x + 0.25 + 0.1, base.y + 0.25, 0.016);
+    step(world, 0.016);
+  }
 
-  assertApprox(base.x - baseStartX, 1.0, 0.01);
-  assertApprox(mid.x - midStartX, 1.0, 0.01);
-  assertApprox(top.x - topStartX, 1.0, 0.01);
+  assertTrue(top.vx > 0);
 });
 

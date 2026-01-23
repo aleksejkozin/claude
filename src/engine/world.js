@@ -23,7 +23,6 @@ export function createWorld(width, height) {
     selectedBlockId: null,
     draggedBlockId: null,
     dragOffset: { x: 0, y: 0 },
-    dragStack: [],
     paused: false,
   };
 }
@@ -79,17 +78,10 @@ export function startDrag(world, blockId, mouseX, mouseY) {
     x: mouseX - block.x,
     y: mouseY - block.y,
   };
-  world.dragStack = findStackAbove(world, block);
 
   block.isDragging = true;
   block.vx = 0;
   block.vy = 0;
-
-  for (const stackBlock of world.dragStack) {
-    stackBlock.isDragging = true;
-    stackBlock.vx = 0;
-    stackBlock.vy = 0;
-  }
 }
 
 export function updateDrag(world, mouseX, mouseY, dt) {
@@ -104,21 +96,9 @@ export function updateDrag(world, mouseX, mouseY, dt) {
   block.x = mouseX - world.dragOffset.x;
   block.y = mouseY - world.dragOffset.y;
 
-  const deltaX = block.x - oldX;
-  const deltaY = block.y - oldY;
-
   if (dt > 0) {
-    block.vx = deltaX / dt;
-    block.vy = deltaY / dt;
-  }
-
-  for (const stackBlock of world.dragStack) {
-    stackBlock.x += deltaX;
-    stackBlock.y += deltaY;
-    if (dt > 0) {
-      stackBlock.vx = deltaX / dt;
-      stackBlock.vy = deltaY / dt;
-    }
+    block.vx = (block.x - oldX) / dt;
+    block.vy = (block.y - oldY) / dt;
   }
 }
 
@@ -130,12 +110,7 @@ export function endDrag(world) {
     block.isDragging = false;
   }
 
-  for (const stackBlock of world.dragStack) {
-    stackBlock.isDragging = false;
-  }
-
   world.draggedBlockId = null;
-  world.dragStack = [];
 }
 
 export function step(world, dt) {

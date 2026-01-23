@@ -137,7 +137,6 @@ worldY = mouseY / PIXELS_PER_METER
   selectedBlockId: string | null,
   draggedBlockId: string | null,
   dragOffset: { x, y },    // mouse offset from block origin during drag (m)
-  dragStack: Block[],      // blocks above dragged block (move together)
   paused: boolean,
 }
 ```
@@ -251,45 +250,32 @@ Applied tangent to collision (perpendicular to separation axis):
 
 ### Contact Graph (Stack Detection)
 
-When dragging a block, the engine detects all blocks stacked above it and moves them together as a unit.
+Functions to detect which blocks are in contact (for future use in friction/impulse propagation):
 
-**Detection algorithm:**
 - `isBlockAbove(upper, lower)`: checks if upper block is resting on lower block
   - Vertical contact: `upper.bottom ≈ lower.top` (within CONTACT_TOLERANCE = 0.05m)
   - Horizontal overlap: blocks share X range
-- `findStackAbove(world, block)`: recursively finds all blocks in the stack above
+- `findBlocksDirectlyAbove(world, block)`: blocks immediately resting on this one
+- `findStackAbove(world, block)`: recursively finds entire stack above
 
-**During drag:**
-1. `startDrag`: computes `dragStack = findStackAbove(world, block)`, marks all as `isDragging`
-2. `updateDrag`: moves dragged block, applies same delta to entire stack
-3. `endDrag`: releases all blocks, clears `dragStack`
-
-This eliminates the 1-frame-per-layer lag that caused stacks to slip during fast drags.
+Currently used for detection only. Friction still drives physics - blocks are NOT rigidly attached during drag. Fast movements can cause blocks to slip or fly off due to inertia.
 
 ### Dragging
 
-A dragged block is a normal physics block whose position is overridden each frame.
+A dragged block follows the mouse but still participates in physics:
 
-**Each frame while dragging:**
-```
-// Save old position
-oldX = block.x
-oldY = block.y
+**Position:** Controlled by mouse (block teleports to cursor)
+**Velocity:** Derived from mouse movement speed
+**Collisions:** Dragged block acts like infinite mass:
+- Pushes other blocks away (separation)
+- Applies impulse to other blocks (they bounce off)
+- Applies friction to other blocks (they get dragged along)
+- But dragged block itself is not affected (mouse wins)
 
-// Override position to follow mouse
-block.x = mouseX - dragOffset.x
-block.y = mouseY - dragOffset.y
-
-// Calculate implied velocity from movement
-block.vx = (block.x - oldX) / dt
-block.vy = (block.y - oldY) / dt
-```
-
-**Why this works:**
-- Dragged block has real velocity based on mouse movement speed
-- Collision detection treats it like any other moving block
-- Other blocks receive proper impulse when hit by dragged block
-- On release, block keeps its velocity and moves naturally
+This means:
+- Dragging into a stack pushes it
+- Dragging up quickly can make stacked blocks fly off (inertia)
+- Heavy stacks still resist via friction, but mouse always wins position
 
 ### Mass Effects Summary
 
