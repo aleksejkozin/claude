@@ -453,4 +453,68 @@ test('friction transfers velocity from dragging block to resting block', () => {
   assertApprox(top.vx, 5, 0.1, 'Top block should move with dragged block');
 });
 
+// ============ Multi-Frame Drag Friction Test ============
+
+test('stacked block should follow dragged block with friction=1 over multiple frames', () => {
+  const world = createWorld(10, 10);
+
+  // Bottom block that will be dragged
+  const bottom = createBlock({
+    x: 2, y: 3,
+    width: 0.5, height: 0.5,
+    friction: 1.0,
+    bounciness: 0,
+  });
+  addBlock(world, bottom);
+
+  // Top block resting on bottom (touching, not overlapping)
+  const top = createBlock({
+    x: 2, y: 2.5, // exactly on top
+    width: 0.5, height: 0.5,
+    friction: 1.0,
+    bounciness: 0,
+  });
+  addBlock(world, top);
+
+  // Let them settle first
+  for (let i = 0; i < 10; i++) {
+    step(world, 0.016);
+  }
+
+  // Start dragging bottom block
+  const centerX = bottom.x + bottom.width / 2;
+  const centerY = bottom.y + bottom.height / 2;
+  startDrag(world, bottom.id, centerX, centerY);
+
+  const dt = 0.016; // ~60fps
+  const dragSpeed = 0.02; // 0.02 m per frame = ~1.25 m/s drag speed
+
+  // Simulate imprecise human dragging - slight vertical wobble
+  const frames = 30;
+  for (let i = 0; i < frames; i++) {
+    // Imprecise drag: mostly right, but with slight Y wobble
+    const wobbleY = Math.sin(i * 0.5) * 0.002; // tiny vertical wobble
+    const newMouseX = centerX + (i + 1) * dragSpeed + world.dragOffset.x;
+    const newMouseY = centerY + wobbleY + world.dragOffset.y;
+
+    updateDrag(world, newMouseX, newMouseY, dt);
+    step(world, dt);
+  }
+
+  // After 30 frames of dragging, bottom moved ~0.6m right
+  const bottomMovement = bottom.x - 2;
+  const topMovement = top.x - 2;
+
+  // With friction=1, top block should have moved the same distance as bottom
+  // Allow small tolerance for numerical errors
+  const slippage = Math.abs(bottomMovement - topMovement);
+
+  assertTrue(
+    slippage < 0.05,
+    `Top block slipped ${slippage.toFixed(3)}m behind bottom block. ` +
+    `Bottom moved ${bottomMovement.toFixed(3)}m, top moved ${topMovement.toFixed(3)}m. ` +
+    `With friction=1, slippage should be < 0.05m`
+  );
+});
+
 console.log('\n=== All tests complete ===');
