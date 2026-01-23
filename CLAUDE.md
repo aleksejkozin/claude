@@ -96,32 +96,90 @@ Each frame, with timestep `dt` (seconds):
 4. **World Constraints**: Bounce off walls/floor
 5. **Apply Damping**: Multiply velocities by 0.99
 
-### Collision Detection (AABB with Center-to-Center Normal)
+### Collision Detection
 
-Two boxes collide if their bounding boxes overlap:
-- Calculate overlap on each axis for penetration depth
-- **Normal always points from one center to the other** (normalized)
-- This naturally handles both edge and corner collisions - edge collisions get near-axis-aligned normals, corner collisions get diagonal normals
-- Return `{ normal: {x, y}, penetration: number }`
+**Step 1: Check if boxes overlap (AABB)**
+
+Two axis-aligned boxes collide if they overlap on both axes:
+```
+not colliding = A.right ≤ B.left OR A.left ≥ B.right OR A.bottom ≤ B.top OR A.top ≥ B.bottom
+colliding = NOT(not colliding)
+```
+
+**Step 2: Calculate penetration depth**
+
+How far the boxes have passed through each other:
+```
+overlapX = min(A.right - B.left, B.right - A.left)
+overlapY = min(A.bottom - B.top, B.bottom - A.top)
+penetration = min(overlapX, overlapY)
+```
+
+We use the smaller overlap because that's the shortest distance to separate them.
+
+**Step 3: Calculate collision normal**
+
+The direction to push blocks apart. We use center-to-center vector:
+```
+dx = A.centerX - B.centerX
+dy = A.centerY - B.centerY
+length = sqrt(dx² + dy²)
+normal = { x: dx/length, y: dy/length }
+```
+
+This naturally gives near-vertical normals for stacked blocks and diagonal normals for corner hits.
+
+**Potential issue**: Slightly offset stacked blocks get a slightly diagonal normal, which could cause drift. Friction should counteract this, but watch for instability.
 
 ### Collision Response (Impulse-Based)
 
-When blocks collide:
+**Step 1: Separate blocks**
 
-1. **Separation**: Push blocks apart along collision normal, proportional to inverse mass
-   - Lighter blocks move more, heavier blocks move less
-   - Formula: `correction = penetration / (1/m1 + 1/m2)`
-   - Each block moves: `correction / its_mass`
+Push blocks apart so they no longer overlap:
+```
+totalInverseMass = 1/m1 + 1/m2
+block1.position += normal * (penetration / totalInverseMass) / m1
+block2.position -= normal * (penetration / totalInverseMass) / m2
+```
 
-2. **Impulse Calculation**:
-   - Relative velocity along normal: `relVel = (v1 - v2) · normal`
-   - If separating (relVel > 0), skip impulse
-   - Impulse magnitude: `j = -(1 + bounciness) * relVel / (1/m1 + 1/m2)`
+Lighter blocks move more. Static blocks have infinite mass (1/m = 0), so they don't move.
 
-3. **Apply Impulse**:
-   - `block1.v += j * normal / block1.mass`
-   - `block2.v -= j * normal / block2.mass`
-   - Heavier blocks change velocity less
+**Step 2: Calculate relative velocity**
+
+How fast are they approaching each other along the collision normal?
+```
+relativeVelocity = (v1 - v2) · normal
+```
+
+If `relativeVelocity > 0`, they're already separating → skip impulse.
+
+**Step 3: Calculate impulse magnitude**
+
+The impulse formula comes from conservation of momentum:
+```
+j = -(1 + bounciness) * relativeVelocity / (1/m1 + 1/m2)
+```
+
+**Why this formula conserves energy (doesn't create it):**
+
+- `bounciness = 0`: Objects stop relative to each other (perfectly inelastic). Energy is lost to "heat".
+- `bounciness = 1`: Objects bounce back with same relative speed (perfectly elastic). Energy conserved.
+- `bounciness` between 0-1: Some energy lost. This is realistic - real collisions lose energy.
+- `bounciness > 1`: Would create energy. **We never allow this.**
+
+The formula is derived from two constraints:
+1. Momentum is conserved: `m1*v1 + m2*v2 = m1*v1' + m2*v2'`
+2. Relative velocity is scaled by bounciness: `v1' - v2' = -bounciness * (v1 - v2)`
+
+Solving these gives the impulse formula. It's mathematically impossible to create energy with `bounciness ≤ 1`.
+
+**Step 4: Apply impulse**
+```
+block1.velocity += (j / m1) * normal
+block2.velocity -= (j / m2) * normal
+```
+
+The same impulse `j` is applied to both blocks (Newton's third law), but divided by mass to get velocity change. Heavier blocks change velocity less.
 
 ### Friction
 
