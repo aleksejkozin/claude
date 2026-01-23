@@ -517,4 +517,218 @@ test('stacked block should follow dragged block with friction=1 over multiple fr
   );
 });
 
+// ============ Full Game Cycle Test with Visualization ============
+
+/**
+ * ASCII visualization helper - draws the world state
+ * Coordinate system: Y=0 at TOP, increases downward (like screen coords)
+ * Each cell is 0.25m x 0.25m
+ */
+function visualizeWorld(world, label = '') {
+  const cellSize = 0.25; // meters per character
+  const width = Math.ceil(world.width / cellSize);
+  const height = Math.ceil(world.height / cellSize);
+
+  // Create empty grid
+  const grid = [];
+  for (let y = 0; y < height; y++) {
+    grid[y] = Array(width).fill('·');
+  }
+
+  // Draw blocks (each block gets a letter: A, B, C...)
+  const blockLabels = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  world.blocks.forEach((block, index) => {
+    const label = blockLabels[index] || '?';
+    const left = Math.floor(block.x / cellSize);
+    const top = Math.floor(block.y / cellSize);
+    const right = Math.ceil((block.x + block.width) / cellSize);
+    const bottom = Math.ceil((block.y + block.height) / cellSize);
+
+    for (let y = top; y < bottom && y < height; y++) {
+      for (let x = left; x < right && x < width; x++) {
+        if (x >= 0 && y >= 0) {
+          grid[y][x] = label;
+        }
+      }
+    }
+  });
+
+  // Build output with coordinates
+  let output = `\n┌─ ${label} ─${'─'.repeat(Math.max(0, width - label.length - 4))}┐\n`;
+  output += `│ World: ${world.width}m × ${world.height}m (1 char = ${cellSize}m)${''.padEnd(Math.max(0, width - 30))}│\n`;
+  output += `│${'─'.repeat(width)}│\n`;
+
+  // Y axis label on left
+  for (let y = 0; y < height; y++) {
+    const yMeters = (y * cellSize).toFixed(1).padStart(3);
+    output += `│${grid[y].join('')}│ ${yMeters}m\n`;
+  }
+
+  output += `└${'─'.repeat(width)}┘\n`;
+
+  // X axis labels
+  output += ' ';
+  for (let x = 0; x < width; x += 4) {
+    const xMeters = (x * cellSize).toFixed(1);
+    output += xMeters.padEnd(4);
+  }
+  output += ' (meters)\n';
+
+  // Block legend
+  output += '\nBlocks:\n';
+  world.blocks.forEach((block, index) => {
+    const label = blockLabels[index];
+    const status = block.isDragging ? ' [DRAGGING]' : '';
+    output += `  ${label}: pos(${block.x.toFixed(2)}, ${block.y.toFixed(2)}) `;
+    output += `vel(${block.vx.toFixed(2)}, ${block.vy.toFixed(2)}) m/s${status}\n`;
+  });
+
+  console.log(output);
+}
+
+test('full game cycle: drop, drag, settle - blocks stay stacked', () => {
+  console.log('\n' + '='.repeat(60));
+  console.log('FULL GAME CYCLE TEST: Drop → Drag → Settle');
+  console.log('='.repeat(60));
+
+  // Create a 4m × 4m world
+  const world = createWorld(4, 4);
+
+  // Block A: stationary block on the "floor" (bottom of world)
+  // Position it so bottom edge is at y=3.5 (leaving 0.5m to floor at y=4)
+  const blockA = createBlock({
+    x: 1.5,       // centered horizontally
+    y: 3.0,       // near bottom
+    width: 1.0,   // 1 meter wide
+    height: 0.5,  // 0.5 meter tall
+    friction: 0.8,
+    bounciness: 0.1,
+  });
+  addBlock(world, blockA);
+
+  // Block B: starts above A, will drop onto it
+  const blockB = createBlock({
+    x: 1.75,      // slightly offset, will land on A
+    y: 1.0,       // starts 2m above A
+    width: 0.5,
+    height: 0.5,
+    friction: 0.8,
+    bounciness: 0.1,
+  });
+  addBlock(world, blockB);
+
+  visualizeWorld(world, 'INITIAL STATE');
+  console.log('Block B will fall onto Block A...\n');
+
+  // PHASE 1: Let Block B fall and settle on Block A
+  console.log('--- PHASE 1: Dropping (simulating 60 frames) ---');
+  const dt = 1/60; // 60 FPS
+  for (let frame = 0; frame < 60; frame++) {
+    step(world, dt);
+  }
+
+  visualizeWorld(world, 'AFTER DROP (1 second)');
+
+  // Verify B landed on A
+  const bBottomAfterDrop = blockB.y + blockB.height;
+  const aTopAfterDrop = blockA.y;
+  console.log(`B bottom: ${bBottomAfterDrop.toFixed(3)}m, A top: ${aTopAfterDrop.toFixed(3)}m`);
+  assertTrue(
+    Math.abs(bBottomAfterDrop - aTopAfterDrop) < 0.1,
+    `B should be resting on A. Gap: ${Math.abs(bBottomAfterDrop - aTopAfterDrop).toFixed(3)}m`
+  );
+
+  // PHASE 2: Drag Block A (bottom block) to the right
+  console.log('\n--- PHASE 2: Dragging Block A to the right ---');
+
+  // Record positions before drag
+  const aStartX = blockA.x;
+  const bStartX = blockB.x;
+  const bStartY = blockB.y;
+
+  // Start drag at center of block A
+  const dragStartX = blockA.x + blockA.width / 2;
+  const dragStartY = blockA.y + blockA.height / 2;
+  startDrag(world, blockA.id, dragStartX, dragStartY);
+
+  console.log(`Starting drag at (${dragStartX.toFixed(2)}, ${dragStartY.toFixed(2)})`);
+  visualizeWorld(world, 'DRAG STARTED');
+
+  // Drag to the right over 30 frames (0.5 seconds)
+  const dragFrames = 30;
+  const dragDistance = 1.0; // drag 1 meter to the right
+  const dragPerFrame = dragDistance / dragFrames;
+
+  for (let frame = 0; frame < dragFrames; frame++) {
+    const mouseX = dragStartX + (frame + 1) * dragPerFrame;
+    const mouseY = dragStartY;
+
+    updateDrag(world, mouseX, mouseY, dt);
+    step(world, dt);
+
+    // Show progress at key frames
+    if (frame === 14 || frame === 29) {
+      visualizeWorld(world, `DRAGGING (frame ${frame + 1}/${dragFrames})`);
+    }
+  }
+
+  // Release drag
+  endDrag(world);
+  console.log('\n--- PHASE 3: Released - letting physics settle ---');
+
+  visualizeWorld(world, 'DRAG RELEASED');
+
+  // PHASE 3: Let everything settle
+  for (let frame = 0; frame < 120; frame++) {
+    step(world, dt);
+  }
+
+  visualizeWorld(world, 'FINAL STATE (settled)');
+
+  // VERIFICATION
+  console.log('--- VERIFICATION ---');
+
+  const aFinalX = blockA.x;
+  const bFinalX = blockB.x;
+  const bFinalY = blockB.y;
+
+  const aMovement = aFinalX - aStartX;
+  const bMovement = bFinalX - bStartX;
+  const bVerticalDrift = Math.abs(bFinalY - bStartY);
+
+  console.log(`A moved: ${aMovement.toFixed(3)}m horizontally`);
+  console.log(`B moved: ${bMovement.toFixed(3)}m horizontally`);
+  console.log(`B vertical drift: ${bVerticalDrift.toFixed(3)}m`);
+
+  // Check that both blocks moved (drag worked)
+  assertTrue(aMovement > 0.5, `A should have moved at least 0.5m (moved ${aMovement.toFixed(3)}m)`);
+
+  // Check that B followed A (friction worked)
+  const slippage = Math.abs(aMovement - bMovement);
+  console.log(`Slippage (difference in movement): ${slippage.toFixed(3)}m`);
+  assertTrue(
+    slippage < 0.2,
+    `B should follow A with minimal slippage. Slippage: ${slippage.toFixed(3)}m`
+  );
+
+  // Check B is still on top of A (didn't fall off)
+  const bBottom = blockB.y + blockB.height;
+  const aTop = blockA.y;
+  const stackGap = Math.abs(bBottom - aTop);
+  console.log(`Stack gap (B bottom to A top): ${stackGap.toFixed(3)}m`);
+  assertTrue(
+    stackGap < 0.1,
+    `B should still be stacked on A. Gap: ${stackGap.toFixed(3)}m`
+  );
+
+  // Check B didn't drift too much vertically
+  assertTrue(
+    bVerticalDrift < 0.15,
+    `B should not drift vertically. Drift: ${bVerticalDrift.toFixed(3)}m`
+  );
+
+  console.log('\n✓ All verifications passed!');
+  console.log('='.repeat(60) + '\n');
+});
+
 console.log('\n=== All tests complete ===');
