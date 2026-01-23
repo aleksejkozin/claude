@@ -171,6 +171,30 @@ if (approaching) {
 
 Same formula for Y axis with `vy`.
 
+**Understanding the `(1 + bounciness)` factor:**
+
+The impulse does two things:
+1. **Stop** the relative motion (the `1` part)
+2. **Reverse** by bounciness amount (the `bounciness` part)
+
+| bounciness | Factor | Result |
+|------------|--------|--------|
+| 0 | 1 | Blocks stop together (no bounce) |
+| 0.5 | 1.5 | Partial bounce |
+| 1 | 2 | Perfect bounce (velocities swap) |
+
+Example: two 1kg blocks, one at 10 m/s hits stationary one:
+
+```
+bounciness = 0 (no bounce):
+  j = -(1+0) * 10 / 2 = -5
+  v1: 10 → 5,  v2: 0 → 5   (both move together)
+
+bounciness = 1 (perfect bounce):
+  j = -(1+1) * 10 / 2 = -10
+  v1: 10 → 0,  v2: 0 → 10  (velocities swapped)
+```
+
 **Why independent axes work:**
 
 - Simpler: no normal vectors, no dot products
@@ -218,7 +242,18 @@ When you drag a block, blocks resting on top should move with it:
 
 - `PIXELS_PER_METER = 100` — conversion factor for rendering
 - `GRAVITY = 9.8` m/s² — Earth gravity
-- `DAMPING = 0.99` per frame — velocity decay
+- `DAMPING = 0.99` per frame — velocity decay (prevents energy accumulation)
 - `COLLISION_ITERATIONS = 4` — solver iterations for stability
 - `SEPARATION_SLOP = 0.0001` m (0.01 mm) — prevents jitter
+- `SLEEP_THRESHOLD = 0.001` m/s — velocities below this become zero
+- `MAX_VELOCITY = 100` m/s — hard cap prevents runaway speeds
+
+### Numerical Stability
+
+Floating point errors can accumulate. These safeguards ensure energy never increases:
+
+1. **Damping**: `v *= 0.99` each frame continuously drains tiny energy errors
+2. **Sleep threshold**: `if |v| < 0.001 then v = 0` stops micro-jittering
+3. **Velocity cap**: `if |v| > MAX then v = MAX` prevents explosions
+4. **Bounciness ≤ 1**: Formula guarantees energy only decreases on collision
 
