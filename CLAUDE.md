@@ -119,90 +119,71 @@ Each frame, with timestep `dt` (seconds):
 4. **World Constraints**: Bounce off walls/floor
 5. **Apply Damping**: Multiply velocities by 0.99
 
-### Collision Detection
+### Collision Detection and Response (Independent Axes)
 
-**Step 1: Check if boxes overlap (AABB)**
+For axis-aligned boxes, we handle X and Y axes independently. No normals, no projection math.
 
-Two axis-aligned boxes collide if they overlap on both axes:
-```
-not colliding = A.right ≤ B.left OR A.left ≥ B.right OR A.bottom ≤ B.top OR A.top ≥ B.bottom
-colliding = NOT(not colliding)
-```
+**Step 1: Check overlap on each axis**
 
-**Step 2: Calculate penetration depth**
-
-How far the boxes have passed through each other:
 ```
 overlapX = min(A.right - B.left, B.right - A.left)
 overlapY = min(A.bottom - B.top, B.bottom - A.top)
-penetration = min(overlapX, overlapY)
+
+colliding = overlapX > 0 AND overlapY > 0
 ```
 
-We use the smaller overlap because that's the shortest distance to separate them.
+**Step 2: Determine push direction**
 
-**Step 3: Calculate collision normal**
-
-The direction to push blocks apart. We use center-to-center vector:
 ```
-dx = A.centerX - B.centerX
-dy = A.centerY - B.centerY
-length = sqrt(dx² + dy²)
-normal = { x: dx/length, y: dy/length }
+dirX = sign(A.centerX - B.centerX)   // +1 if A is right of B, -1 if left
+dirY = sign(A.centerY - B.centerY)   // +1 if A is below B, -1 if above
 ```
 
-This naturally gives near-vertical normals for stacked blocks and diagonal normals for corner hits.
+**Step 3: Separate on each axis**
 
-**Potential issue**: Slightly offset stacked blocks get a slightly diagonal normal, which could cause drift. Friction should counteract this, but watch for instability.
+Push blocks apart proportional to inverse mass:
 
-### Collision Response (Impulse-Based)
-
-**Step 1: Separate blocks**
-
-Push blocks apart so they no longer overlap:
 ```
-totalInverseMass = 1/m1 + 1/m2
-block1.position += normal * (penetration / totalInverseMass) / m1
-block2.position -= normal * (penetration / totalInverseMass) / m2
-```
+totalInvMass = 1/m1 + 1/m2
 
-Lighter blocks move more. Static blocks have infinite mass (1/m = 0), so they don't move.
+A.x += dirX * overlapX * (1/m1) / totalInvMass
+B.x -= dirX * overlapX * (1/m2) / totalInvMass
 
-**Step 2: Calculate relative velocity**
-
-How fast are they approaching each other along the collision normal?
-```
-relativeVelocity = (v1 - v2) · normal
+A.y += dirY * overlapY * (1/m1) / totalInvMass
+B.y -= dirY * overlapY * (1/m2) / totalInvMass
 ```
 
-If `relativeVelocity > 0`, they're already separating → skip impulse.
+Static blocks have `1/m = 0`, so they don't move.
 
-**Step 3: Calculate impulse magnitude**
+**Step 4: Apply impulse on each axis (1D collision formula)**
 
-The impulse formula comes from conservation of momentum:
+For X axis:
 ```
-j = -(1 + bounciness) * relativeVelocity / (1/m1 + 1/m2)
-```
+relVx = A.vx - B.vx
+approaching = (relVx * dirX) < 0    // moving toward each other?
 
-**Why this formula conserves energy (doesn't create it):**
-
-- `bounciness = 0`: Objects stop relative to each other (perfectly inelastic). Energy is lost to "heat".
-- `bounciness = 1`: Objects bounce back with same relative speed (perfectly elastic). Energy conserved.
-- `bounciness` between 0-1: Some energy lost. This is realistic - real collisions lose energy.
-- `bounciness > 1`: Would create energy. **We never allow this.**
-
-The formula is derived from two constraints:
-1. Momentum is conserved: `m1*v1 + m2*v2 = m1*v1' + m2*v2'`
-2. Relative velocity is scaled by bounciness: `v1' - v2' = -bounciness * (v1 - v2)`
-
-Solving these gives the impulse formula. It's mathematically impossible to create energy with `bounciness ≤ 1`.
-
-**Step 4: Apply impulse**
-```
-block1.velocity += (j / m1) * normal
-block2.velocity -= (j / m2) * normal
+if (approaching) {
+    jx = -(1 + bounciness) * relVx / totalInvMass
+    A.vx += jx / m1
+    B.vx -= jx / m2
+}
 ```
 
-The same impulse `j` is applied to both blocks (Newton's third law), but divided by mass to get velocity change. Heavier blocks change velocity less.
+Same formula for Y axis with `vy`.
+
+**Why independent axes work:**
+
+- Simpler: no normal vectors, no dot products
+- Stable stacking: vertical collision always gets pure vertical impulse
+- Corner collisions: both axes get impulses (correct for rectangles)
+
+**Why this conserves energy:**
+
+Each axis uses the standard 1D collision formula derived from:
+1. Conservation of momentum: `m1*v1 + m2*v2 = constant`
+2. Coefficient of restitution: `v1' - v2' = -bounciness * (v1 - v2)`
+
+With `bounciness ≤ 1`, energy can only stay same or decrease, never increase.
 
 ### Friction
 
