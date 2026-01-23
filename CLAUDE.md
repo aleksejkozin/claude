@@ -96,12 +96,24 @@ Each frame, with timestep `dt` (seconds):
 4. **World Constraints**: Bounce off walls/floor
 5. **Apply Damping**: Multiply velocities by 0.99
 
-### Collision Detection (AABB)
+### Collision Detection (AABB with Diagonal Normals)
 
 Two boxes collide if their bounding boxes overlap:
 - Calculate overlap on each axis
-- Collision normal points along axis of minimum penetration
+- **Edge collision**: If one overlap is much smaller than the other (ratio < 0.5 or > 2.0), normal is axis-aligned (perpendicular to the edge)
+- **Corner collision**: If overlaps are similar (ratio 0.5 to 2.0), normal is diagonal (points from center to center)
 - Return `{ normal: {x, y}, penetration: number }`
+
+```
+Edge collision (overlapX << overlapY):    Corner collision (overlapX ≈ overlapY):
+
+    ┌─────────┐                               ┌─────┐
+    │    A    │                               │  A  │
+    │         ├────────┐                      │   ┌─┼─┐
+    │         │   B    │  → horizontal        └───┼─┘ │  ↘ diagonal
+    └─────────┴────────┘    normal                │ B │    normal
+                                                  └───┘
+```
 
 ### Collision Response (Impulse-Based)
 

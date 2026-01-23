@@ -236,6 +236,23 @@ test('checkCollision returns correct normal for vertical collision', () => {
   assertEqual(collision.normal.y, -1); // block1 should move up
 });
 
+test('checkCollision returns diagonal normal for corner collision', () => {
+  // Place blocks so they overlap similarly on both axes (corner collision)
+  const block1 = createBlock({ x: 0, y: 0, width: 50, height: 50 });
+  const block2 = createBlock({ x: 45, y: 45, width: 50, height: 50 }); // 5px overlap on both X and Y
+  const collision = checkCollision(block1, block2);
+  assertNotNull(collision);
+  // Normal should be diagonal (both x and y non-zero)
+  assertTrue(collision.normal.x !== 0, 'Normal x should be non-zero for corner');
+  assertTrue(collision.normal.y !== 0, 'Normal y should be non-zero for corner');
+  // Normal should point from block2 toward block1 (negative direction)
+  assertTrue(collision.normal.x < 0, 'Normal x should be negative');
+  assertTrue(collision.normal.y < 0, 'Normal y should be negative');
+  // Normal should be normalized (length ≈ 1)
+  const length = Math.sqrt(collision.normal.x ** 2 + collision.normal.y ** 2);
+  assertApprox(length, 1, 0.01);
+});
+
 test('applyDamping reduces velocity', () => {
   const block = createBlock({ vx: 100, vy: 100 });
   applyDamping(block, 0.9);
