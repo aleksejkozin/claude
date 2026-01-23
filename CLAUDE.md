@@ -231,6 +231,31 @@ Applied tangent to collision (perpendicular to separation axis):
 | 0.5 | Normal (default) |
 | 1.0 | Maximum grip |
 
+### Dragging
+
+A dragged block is a normal physics block whose position is overridden each frame.
+
+**Each frame while dragging:**
+```
+// Save old position
+oldX = block.x
+oldY = block.y
+
+// Override position to follow mouse
+block.x = mouseX - dragOffset.x
+block.y = mouseY - dragOffset.y
+
+// Calculate implied velocity from movement
+block.vx = (block.x - oldX) / dt
+block.vy = (block.y - oldY) / dt
+```
+
+**Why this works:**
+- Dragged block has real velocity based on mouse movement speed
+- Collision detection treats it like any other moving block
+- Other blocks receive proper impulse when hit by dragged block
+- On release, block keeps its velocity and moves naturally
+
 ### Mass Effects Summary
 
 | Scenario | Heavy Block | Light Block |
