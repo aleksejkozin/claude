@@ -1,6 +1,11 @@
 # CLAUDE.md
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-Every time you make changes push them to main, I will check them on a different machine
+
+- Every time you make changes push them to main, I will check them on a different machine
+- This document is supposed to be human read. Engineer should understand and validate this document
+- All design decisions should be documented here. No code should exist if it is not liked to this document. If such code exests it should be removed or this document should be updated to include
+- Basically, this is the main source of truth, the code is secondary
+- Here we also describe the data types/object shapes. We do not use types script but I would like to see data descriptions and validate them
 
 ## Project Overview
 
