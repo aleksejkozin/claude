@@ -119,9 +119,9 @@ Each frame, with timestep `dt` (seconds):
 4. **World Constraints**: Bounce off walls/floor
 5. **Apply Damping**: Multiply velocities by 0.99
 
-### Collision Detection and Response (Independent Axes)
+### Collision Detection and Response (Minimum Penetration Axis)
 
-For axis-aligned boxes, we handle X and Y axes independently. No normals, no projection math.
+For axis-aligned boxes, we resolve on the **minimum penetration axis only**.
 
 **Step 1: Check overlap on each axis**
 
@@ -132,56 +132,56 @@ overlapY = min(A.bottom - B.top, B.bottom - A.top)
 colliding = overlapX > 0 AND overlapY > 0
 ```
 
-**Step 2: Determine push direction**
+**Step 2: Determine separation axis and direction**
 
 ```
+separateOnX = overlapX < overlapY  // minimum penetration axis
+
 dirX = sign(A.centerX - B.centerX)   // +1 if A is right of B, -1 if left
 dirY = sign(A.centerY - B.centerY)   // +1 if A is below B, -1 if above
 ```
 
-**Step 3: Separate on each axis**
-
-Simple rules - no mass weighting for position:
+**Step 3: Separate on minimum penetration axis ONLY**
 
 ```
+overlap = separateOnX ? overlapX : overlapY
+dir = separateOnX ? dirX : dirY
+
 if (A.isStatic) {
-    B.x -= dirX * overlapX
-    B.y -= dirY * overlapY
+    // push B away on the separation axis
 } else if (B.isStatic) {
-    A.x += dirX * overlapX
-    A.y += dirY * overlapY
+    // push A away on the separation axis
 } else {
-    // Both dynamic: split 50/50
-    A.x += dirX * overlapX * 0.5
-    A.y += dirY * overlapY * 0.5
-    B.x -= dirX * overlapX * 0.5
-    B.y -= dirY * overlapY * 0.5
+    // Both dynamic: split 50/50 on separation axis
 }
 ```
 
-Floating point errors may leave micro-overlaps, but at 100 px/m they're invisible (0.0001m = 0.01 pixels).
+**Why minimum penetration?** When a block falls onto another:
+- overlapX = 0.5 (full width, they're aligned)
+- overlapY = 0.05 (just started penetrating)
 
-**Step 4: Apply impulse on each axis (1D collision formula)**
+We separate on Y only. If we separated on both axes, the bottom block would fly sideways!
 
-For X axis:
+**Step 4: Apply impulse on separation axis ONLY**
+
 ```
-relVx = A.vx - B.vx
-approaching = (relVx * dirX) < 0    // moving toward each other?
+relV = separateOnX ? (A.vx - B.vx) : (A.vy - B.vy)
+dir = separateOnX ? dirX : dirY
+approaching = (relV * dir) < 0
 
 if (approaching) {
-    jx = -(1 + bounciness) * relVx / totalInvMass
-    A.vx += jx / m1
-    B.vx -= jx / m2
+    j = -(1 + bounciness) * relV / totalInvMass
+    // apply j to the separation axis velocity only
 }
 ```
 
-Same formula for Y axis with `vy`.
+**Step 5: Apply friction on tangent axis**
+
+Friction opposes sliding motion perpendicular to the collision:
+- Y collision (stacking) → friction affects X velocity
+- X collision (side hit) → friction affects Y velocity
 
 **Understanding the `(1 + bounciness)` factor:**
-
-The impulse does two things:
-1. **Stop** the relative motion (the `1` part)
-2. **Reverse** by bounciness amount (the `bounciness` part)
 
 | bounciness | Factor | Result |
 |------------|--------|--------|
@@ -189,27 +189,9 @@ The impulse does two things:
 | 0.5 | 1.5 | Partial bounce |
 | 1 | 2 | Perfect bounce (velocities swap) |
 
-Example: two 1kg blocks, one at 10 m/s hits stationary one:
-
-```
-bounciness = 0 (no bounce):
-  j = -(1+0) * 10 / 2 = -5
-  v1: 10 → 5,  v2: 0 → 5   (both move together)
-
-bounciness = 1 (perfect bounce):
-  j = -(1+1) * 10 / 2 = -10
-  v1: 10 → 0,  v2: 0 → 10  (velocities swapped)
-```
-
-**Why independent axes work:**
-
-- Simpler: no normal vectors, no dot products
-- Stable stacking: vertical collision always gets pure vertical impulse
-- Corner collisions: both axes get impulses (correct for rectangles)
-
 **Why this conserves energy:**
 
-Each axis uses the standard 1D collision formula derived from:
+The 1D collision formula is derived from:
 1. Conservation of momentum: `m1*v1 + m2*v2 = constant`
 2. Coefficient of restitution: `v1' - v2' = -bounciness * (v1 - v2)`
 

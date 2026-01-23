@@ -383,4 +383,47 @@ test('resolveCollision respects static blocks', () => {
   assertTrue(dynamicBlock.x > 0.4);
 });
 
+// ============ Falling Block Test (Bug Reproduction) ============
+
+test('block falling onto another should bounce and rest, not push sideways', () => {
+  // Bottom block sitting on ground
+  const bottom = createBlock({
+    x: 1, y: 3, // position
+    width: 0.5, height: 0.5,
+    vx: 0, vy: 0 // stationary
+  });
+
+  // Top block falling down onto bottom block
+  // Slightly overlapping vertically (just landed)
+  const top = createBlock({
+    x: 1, y: 2.45, // overlaps by 0.05m vertically
+    width: 0.5, height: 0.5,
+    vx: 0, vy: 2 // falling at 2 m/s
+  });
+
+  const collision = checkCollision(top, bottom);
+  assertNotNull(collision, 'Should detect collision');
+
+  // Key assertion: X overlap is large (0.5), Y overlap is small (0.05)
+  // So separation should happen on Y axis only
+  assertApprox(collision.overlapX, 0.5, 0.01);
+  assertApprox(collision.overlapY, 0.05, 0.01);
+
+  const originalBottomX = bottom.x;
+  const originalTopX = top.x;
+
+  resolveCollision(top, bottom, collision);
+
+  // CRITICAL: Neither block should move horizontally!
+  // This is the bug - bottom block is being pushed sideways
+  assertApprox(bottom.x, originalBottomX, 0.01, 'Bottom block should NOT move horizontally');
+  assertApprox(top.x, originalTopX, 0.01, 'Top block should NOT move horizontally');
+
+  // Top block should bounce up (negative vy)
+  assertTrue(top.vy < 0, 'Top block should bounce up');
+
+  // Bottom block might get small downward impulse but should stay mostly still
+  assertTrue(Math.abs(bottom.vy) < 1, 'Bottom block should not get large velocity');
+});
+
 console.log('\n=== All tests complete ===');

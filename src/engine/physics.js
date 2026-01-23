@@ -31,7 +31,7 @@ export function checkCollision(block1, block2) {
   // No collision if no overlap on either axis
   if (overlapX <= 0 || overlapY <= 0) return null;
 
-  // Direction from B to A (center to center)
+  // Direction from block2 to block1 (center to center)
   const c1 = getCenter(block1);
   const c2 = getCenter(block2);
   const dirX = Math.sign(c1.x - c2.x) || 1;
@@ -46,34 +46,51 @@ export function resolveCollision(block1, block2, collision) {
 
   const { overlapX, overlapY, dirX, dirY } = collision;
 
-  // Step 1: Separate blocks on each axis
-  separateBlocks(block1, block2, overlapX, overlapY, dirX, dirY);
+  // Determine the axis of minimum penetration
+  // This is the axis we separate on and apply impulse
+  const separateOnX = overlapX < overlapY;
 
-  // Step 2: Apply impulse on each axis independently
-  applyImpulse(block1, block2, dirX, dirY);
+  // Step 1: Separate blocks on the minimum penetration axis ONLY
+  separateBlocks(block1, block2, overlapX, overlapY, dirX, dirY, separateOnX);
 
-  // Step 3: Apply friction (tangent to collision)
-  applyFriction(block1, block2, overlapX, overlapY);
+  // Step 2: Apply impulse on the separation axis ONLY
+  applyImpulse(block1, block2, dirX, dirY, separateOnX);
+
+  // Step 3: Apply friction on the tangent axis (perpendicular to separation)
+  applyFriction(block1, block2, separateOnX);
 }
 
-function separateBlocks(block1, block2, overlapX, overlapY, dirX, dirY) {
-  // Simple 50/50 split for dynamic blocks, full push for static
+function separateBlocks(block1, block2, overlapX, overlapY, dirX, dirY, separateOnX) {
+  const overlap = separateOnX ? overlapX : overlapY;
+  const dir = separateOnX ? dirX : dirY;
+
   if (block1.isStatic) {
-    block2.x -= dirX * overlapX;
-    block2.y -= dirY * overlapY;
+    // Only block2 moves
+    if (separateOnX) {
+      block2.x -= dir * overlap;
+    } else {
+      block2.y -= dir * overlap;
+    }
   } else if (block2.isStatic) {
-    block1.x += dirX * overlapX;
-    block1.y += dirY * overlapY;
+    // Only block1 moves
+    if (separateOnX) {
+      block1.x += dir * overlap;
+    } else {
+      block1.y += dir * overlap;
+    }
   } else {
     // Both dynamic: split 50/50
-    block1.x += dirX * overlapX * 0.5;
-    block1.y += dirY * overlapY * 0.5;
-    block2.x -= dirX * overlapX * 0.5;
-    block2.y -= dirY * overlapY * 0.5;
+    if (separateOnX) {
+      block1.x += dir * overlap * 0.5;
+      block2.x -= dir * overlap * 0.5;
+    } else {
+      block1.y += dir * overlap * 0.5;
+      block2.y -= dir * overlap * 0.5;
+    }
   }
 }
 
-function applyImpulse(block1, block2, dirX, dirY) {
+function applyImpulse(block1, block2, dirX, dirY, separateOnX) {
   const bounciness = getEffectiveBounciness(block1, block2);
 
   const invMass1 = block1.isStatic ? 0 : 1 / block1.mass;
@@ -82,42 +99,43 @@ function applyImpulse(block1, block2, dirX, dirY) {
 
   if (totalInvMass === 0) return;
 
-  // X axis impulse
-  const relVx = block1.vx - block2.vx;
-  const approachingX = (relVx * dirX) < 0;
+  if (separateOnX) {
+    // X axis collision - apply impulse on X only
+    const relVx = block1.vx - block2.vx;
+    const approaching = (relVx * dirX) < 0;
 
-  if (approachingX) {
-    const jx = -(1 + bounciness) * relVx / totalInvMass;
-    if (!block1.isStatic && !block1.isDragging) {
-      block1.vx += jx * invMass1;
+    if (approaching) {
+      const j = -(1 + bounciness) * relVx / totalInvMass;
+      if (!block1.isStatic && !block1.isDragging) {
+        block1.vx += j * invMass1;
+      }
+      if (!block2.isStatic && !block2.isDragging) {
+        block2.vx -= j * invMass2;
+      }
     }
-    if (!block2.isStatic && !block2.isDragging) {
-      block2.vx -= jx * invMass2;
-    }
-  }
+  } else {
+    // Y axis collision - apply impulse on Y only
+    const relVy = block1.vy - block2.vy;
+    const approaching = (relVy * dirY) < 0;
 
-  // Y axis impulse
-  const relVy = block1.vy - block2.vy;
-  const approachingY = (relVy * dirY) < 0;
-
-  if (approachingY) {
-    const jy = -(1 + bounciness) * relVy / totalInvMass;
-    if (!block1.isStatic && !block1.isDragging) {
-      block1.vy += jy * invMass1;
-    }
-    if (!block2.isStatic && !block2.isDragging) {
-      block2.vy -= jy * invMass2;
+    if (approaching) {
+      const j = -(1 + bounciness) * relVy / totalInvMass;
+      if (!block1.isStatic && !block1.isDragging) {
+        block1.vy += j * invMass1;
+      }
+      if (!block2.isStatic && !block2.isDragging) {
+        block2.vy -= j * invMass2;
+      }
     }
   }
 }
 
-function applyFriction(block1, block2, overlapX, overlapY) {
+function applyFriction(block1, block2, separateOnX) {
   const friction = getEffectiveFriction(block1, block2);
 
-  // Determine which axis is the contact surface
-  // Smaller overlap = separation axis, larger overlap = contact surface (tangent)
-  if (overlapX < overlapY) {
-    // Vertical contact surface - friction affects Y velocity
+  // Friction acts on the tangent axis (perpendicular to collision)
+  if (separateOnX) {
+    // X collision - friction affects Y velocity (tangent)
     const relVy = block1.vy - block2.vy;
     const frictionImpulse = relVy * friction * 0.5;
 
@@ -128,7 +146,7 @@ function applyFriction(block1, block2, overlapX, overlapY) {
       block2.vy += frictionImpulse;
     }
   } else {
-    // Horizontal contact surface - friction affects X velocity
+    // Y collision - friction affects X velocity (tangent)
     const relVx = block1.vx - block2.vx;
     const frictionImpulse = relVx * friction * 0.5;
 
