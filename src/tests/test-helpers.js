@@ -83,6 +83,11 @@ export function simulate({ world, time }) {
 export function keyframe(world) {
   const ascii = renderWorldASCII(world);
 
+  // Print to console
+  console.log('\n  KEYFRAME:');
+  ascii.split('\n').forEach(line => console.log('  ' + line));
+  console.log('');
+
   // Find caller location from stack trace
   const stack = new Error().stack;
   const callerLine = stack.split('\n')[2]; // [0]=Error, [1]=keyframe, [2]=caller
