@@ -79,6 +79,9 @@ export function simulate({ world, time }) {
   }
 }
 
+// Track keyframes per file for ordered updates
+const keyframeCounters = new Map();
+
 // Capture keyframe and update source file directly
 export function keyframe(world) {
   const ascii = renderWorldASCII(world);
@@ -88,44 +91,48 @@ export function keyframe(world) {
   ascii.split('\n').forEach(line => console.log('  ' + line));
   console.log('');
 
-  // Find caller location from stack trace
+  // Find caller file from stack trace
   const stack = new Error().stack;
-  const callerLine = stack.split('\n')[2]; // [0]=Error, [1]=keyframe, [2]=caller
+  const callerLine = stack.split('\n')[2];
   const match = callerLine.match(/file:\/\/(.+):(\d+):\d+/);
 
   if (match) {
     const filePath = match[1];
-    const lineNumber = parseInt(match[2], 10);
-    updateKeyframeAtLine(filePath, lineNumber, ascii);
+
+    // Get current keyframe index for this file
+    const count = keyframeCounters.get(filePath) || 0;
+    keyframeCounters.set(filePath, count + 1);
+
+    updateKeyframeByIndex(filePath, count, ascii);
   }
 
   return ascii;
 }
 
-// Update the KEYFRAME comment following the given line
-function updateKeyframeAtLine(filePath, lineNumber, ascii) {
+// Update the Nth KEYFRAME comment in the file
+function updateKeyframeByIndex(filePath, index, ascii) {
   let content = fs.readFileSync(filePath, 'utf-8');
   const lines = content.split('\n');
 
-  // Find the KEYFRAME comment after the keyframe() call
+  // Find all KEYFRAME comments
+  let keyframeCount = 0;
   let keyframeStart = -1;
   let keyframeEnd = -1;
 
-  for (let i = lineNumber; i < lines.length; i++) {
+  for (let i = 0; i < lines.length; i++) {
     if (lines[i].includes('/* KEYFRAME')) {
-      keyframeStart = i;
-      // Find closing */
-      for (let j = i; j < lines.length; j++) {
-        if (lines[j].includes('*/')) {
-          keyframeEnd = j;
-          break;
+      if (keyframeCount === index) {
+        keyframeStart = i;
+        // Find closing */
+        for (let j = i; j < lines.length; j++) {
+          if (lines[j].includes('*/')) {
+            keyframeEnd = j;
+            break;
+          }
         }
+        break;
       }
-      break;
-    }
-    // Stop if we hit another statement (not whitespace or comment)
-    if (lines[i].trim() && !lines[i].trim().startsWith('//') && !lines[i].trim().startsWith('/*')) {
-      break;
+      keyframeCount++;
     }
   }
 
