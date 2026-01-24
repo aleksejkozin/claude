@@ -42,13 +42,31 @@ Function names should express invariants, not implementation. No comments explai
 
 ### Test DSL (src/tests/test-helpers.js)
 
+Design principles:
+
 No magic numbers. Use words for positions ('left', 'center', 'right') and relative placement ('on top of base') instead of coordinates. The reader should understand the test setup without calculating positions.
 
-Human-like placement. Blocks aren't placed perfectly - slight random offset and settling time simulate how a person would place them.
+Human-like placement. Blocks aren't placed perfectly - slight random offset (±0.075m) and settling time (0.2s) simulate how a person would place them.
 
 All parameters named. If a function uses named parameters, all must be named.
 
-Animated recordings. Create a recorder with createRecorder(), pass it to action functions, then call save(). Recordings save to src/tests/recordings/ as self-contained HTML files with canvas animation, playback controls, and raw JSON frame data. No global state - the recorder is an object you pass around.
+No global state. Functions like createRecorder() return objects you pass around, rather than storing state in module globals.
+
+Time matters for drag. dragRight() takes both distance and duration (over parameter) because physics behavior depends on speed.
+
+Placement functions:
+
+    placeOnFloor({ world, block, at })     // at: 'left'|'center'|'right'|0-1
+    placeOn({ world, block, on })          // stack block on another
+    placeWall({ world, block, at })        // static wall at 'left' or 'right'
+
+Action functions:
+
+    dragRight({ world, block, distance, over, recorder })
+    dragLeft({ world, block, distance, over, recorder })
+    simulate({ world, time, recorder })
+
+Animated recordings. Create a recorder with createRecorder(), pass it to action functions, then call save(). Recordings save to src/tests/recordings/ as self-contained HTML files with canvas animation, playback controls, and raw JSON frame data.
 
     // Recording: src/tests/recordings/drag-stack.html
     test('dragging base moves stack via friction', () => {
@@ -58,6 +76,8 @@ Animated recordings. Create a recorder with createRecorder(), pass it to action 
       recorder.save();
       // ... assertions ...
     });
+
+Recording format: HTML files are self-contained with embedded JavaScript. Canvas renders colored blocks (different color per dynamic block, gray for static). Controls include play/pause, step, and speed slider. Raw JSON frame data available in collapsible section for debugging.
 
 ### Bug Fixing Workflow
 

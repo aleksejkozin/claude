@@ -227,12 +227,6 @@ function generateAnimationHTML({ name, world, frames }) {
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 2;
         ctx.strokeRect(x, y, w, h);
-
-        // Label
-        ctx.fillStyle = '#fff';
-        ctx.font = '12px monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText(block.id, x + w/2, y + h/2 + 4);
       }
 
       frameInfo.textContent = 'Frame ' + (currentFrame + 1) + '/' + frames.length;
