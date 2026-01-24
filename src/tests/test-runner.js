@@ -3,10 +3,33 @@
 const results = {
   passed: 0,
   failed: 0,
+  skipped: 0,
   tests: [],
 };
 
+// Test filter - set via command line arg or setFilter()
+let testFilter = null;
+
+// Check for Node.js command line filter
+if (typeof process !== 'undefined' && process.argv) {
+  const filterArg = process.argv[2];
+  if (filterArg) {
+    testFilter = filterArg.toLowerCase();
+    console.log(`Running tests matching: "${filterArg}"\n`);
+  }
+}
+
+export function setFilter(filter) {
+  testFilter = filter ? filter.toLowerCase() : null;
+}
+
 export function test(name, fn) {
+  // Skip if filter set and name doesn't match
+  if (testFilter && !name.toLowerCase().includes(testFilter)) {
+    results.skipped++;
+    return;
+  }
+
   try {
     fn();
     results.passed++;
