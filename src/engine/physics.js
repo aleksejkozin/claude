@@ -146,12 +146,14 @@ function applyFriction(block1, block2, separateOnX, dt) {
       block2.vy += relVy * friction;
     }
   } else {
+    // Vertical collision - friction affects horizontal velocity
     const relVx = block1.vx - block2.vx;
 
     if (canMove1 && canMove2) {
       const impulse = relVx * friction * 0.5;
       block1.vx -= impulse;
       block2.vx += impulse;
+
     } else if (canMove1) {
       block1.vx -= relVx * friction;
     } else if (canMove2) {

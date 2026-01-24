@@ -8,6 +8,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Here we also describe the data types/object shapes. We do not use types script but I would like to see data descriptions and validate them
 - The project should not contain unused code, files, or descriptions
 
+## Coding Principles
+
+When fixing bugs, prefer well-known algorithmic solutions over special-case patches. Adding conditionals and edge-case handling accumulates "scars" in the code. If a problem requires many special cases to fix, step back and consider whether the fundamental approach is wrong. Look for established algorithms that solve the problem class correctly.
+
 ## Project Overview
 
 Tower Builder is a physics-based tower building game where players drag and drop blocks to build towers. Currently in dev mode with a physics engine - game mode with enemies is planned for later.
@@ -270,14 +274,15 @@ Applied tangent to collision (perpendicular to separation axis):
 2. Effective friction = average of both blocks: `(A.friction + B.friction) / 2`
 3. Apply friction impulse: `frictionImpulse = relVelTangent * effectiveFriction`
 4. Split 50/50 between both blocks
-5. **Position correction during drag**: When one block is being dragged, also apply position correction to the resting block to eliminate one-frame delay slippage
 
 | Friction Value | Behavior |
 |----------------|----------|
 | 0.0 | Frictionless (ice) |
 | 0.2 | Slippery |
 | 0.5 | Normal (default) |
-| 1.0 | Maximum grip (stacked block follows dragged block perfectly) |
+| 1.0 | High grip (reduces slippage but not perfect) |
+
+Known limitation: The current impulse-based friction only equalizes velocities per collision pair. In tall stacks, the correction doesn't fully propagate in one frame, causing blocks to drift slightly during fast drags. A proper fix requires constraint-based physics (like Box2D) or iterative position solvers that treat the stack as a connected system.
 
 ### Contact Graph (Stack Detection)
 
