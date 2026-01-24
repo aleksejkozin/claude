@@ -512,27 +512,26 @@ test('dragging base lets physics move stack via friction (readable)', () => {
   const top = createBlock({ id: 'top', friction: 1.0 });
 
   placeOnFloor({ world, block: base, at: 'center' });
-  placeOn({ block: top, on: base });
-  addBlock(world, top);
+  placeOn({ world, block: top, on: base });
 
   keyframe(world);
-  /* KEYFRAME
-              @@       
-              @@       
-              ##       
-              ##       
-       ================
+  /*
+            @@       
+            @@       
+            ##       
+            ##       
+     ================
   */
 
   dragRight({ world, block: base, distance: 0.5, over: 0.3 });
 
   keyframe(world);
-  /* KEYFRAME
-              @@       
-              @@       
-               ##      
-               ##      
-       ================
+  /*
+            @@       
+            @@       
+             ##      
+             ##      
+     ================
   */
 
   assertTrue(top.vx > 0);
