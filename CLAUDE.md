@@ -48,14 +48,14 @@ Human-like placement. Blocks aren't placed perfectly - slight random offset and 
 
 All parameters named. If a function uses named parameters, all must be named.
 
-Animated recordings. Wrap test actions with startRecording/stopRecording to capture ASCII animation frames. Recordings save to src/tests/recordings/ as text files. Each test with a recording includes a comment showing the file path. Each block uses a different fill character (##, @@, %%).
+Animated recordings. Create a recorder with createRecorder(), pass it to action functions, then call save(). Recordings save to src/tests/recordings/ as self-contained HTML files with canvas animation, playback controls, and raw JSON frame data. No global state - the recorder is an object you pass around.
 
-    // Recording: src/tests/recordings/drag-stack.txt
+    // Recording: src/tests/recordings/drag-stack.html
     test('dragging base moves stack via friction', () => {
       // ... setup blocks ...
-      startRecording({ world, name: 'drag-stack' });
-      dragRight({ world, block: base, distance: 0.5, over: 0.3 });
-      stopRecording();
+      const recorder = createRecorder({ world, name: 'drag-stack' });
+      dragRight({ world, block: base, distance: 0.5, over: 0.3, recorder });
+      recorder.save();
       // ... assertions ...
     });
 

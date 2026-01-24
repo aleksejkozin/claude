@@ -21,9 +21,7 @@ import {
   placeWall,
   dragRight,
   simulate,
-  startRecording,
-  captureFrame,
-  stopRecording,
+  createRecorder,
 } from './test-helpers.js';
 
 import {
@@ -508,7 +506,7 @@ test('findStackAbove finds multi-layer stack', () => {
   assertTrue(stack.includes(top));
 });
 
-// Recording: src/tests/recordings/drag-stack.txt
+// Recording: src/tests/recordings/drag-stack.html
 test('dragging base lets physics move stack via friction (readable)', () => {
   const world = createWorld(4, 4);
 
@@ -518,14 +516,14 @@ test('dragging base lets physics move stack via friction (readable)', () => {
   placeOnFloor({ world, block: base, at: 'center' });
   placeOn({ world, block: top, on: base });
 
-  startRecording({ world, name: 'drag-stack' });
-  dragRight({ world, block: base, distance: 0.5, over: 0.3 });
-  stopRecording();
+  const recorder = createRecorder({ world, name: 'drag-stack' });
+  dragRight({ world, block: base, distance: 0.5, over: 0.3, recorder });
+  recorder.save();
 
   assertTrue(top.vx > 0);
 });
 
-// Recording: src/tests/recordings/stack-against-wall.txt
+// Recording: src/tests/recordings/stack-against-wall.html
 test('stacked blocks maintain relative positions when pushed against wall', () => {
   const world = createWorld(4, 4);
 
@@ -542,10 +540,10 @@ test('stacked blocks maintain relative positions when pushed against wall', () =
   const offsetMidBase = mid.x - base.x;
   const offsetTopMid = top.x - mid.x;
 
-  startRecording({ world, name: 'stack-against-wall' });
-  dragRight({ world, block: base, distance: 3.0, over: 0.5 });
-  dragRight({ world, block: base, distance: 1.0, over: 0.3 });
-  stopRecording();
+  const recorder = createRecorder({ world, name: 'stack-against-wall' });
+  dragRight({ world, block: base, distance: 3.0, over: 0.5, recorder });
+  dragRight({ world, block: base, distance: 1.0, over: 0.3, recorder });
+  recorder.save();
 
   const newOffsetMidBase = mid.x - base.x;
   const newOffsetTopMid = top.x - mid.x;

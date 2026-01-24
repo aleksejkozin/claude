@@ -1,11 +1,8 @@
 // Test helpers for readable tests
-// Provides placement functions and animated ASCII recordings
+// Provides placement functions and animated HTML recordings
 
 import { addBlock, startDrag, updateDrag, endDrag, step } from '../engine/world.js';
 import fs from 'fs';
-
-// Fill characters for different blocks
-const FILL_CHARS = ['#', '@', '%', '&', '*', 'O', 'X', '+'];
 
 // Small random offset to simulate human imprecision
 function humanOffset() {
@@ -69,46 +66,201 @@ export function placeWall({ world, block, at }) {
   return block;
 }
 
-// Recording state
-let currentRecording = null;
+// Create a recorder object (no global state)
+export function createRecorder({ world, name }) {
+  const frames = [];
 
-export function startRecording({ world, name }) {
-  currentRecording = { name, world, frames: [] };
+  function captureFrame() {
+    const frameData = {
+      blocks: world.blocks.map(b => ({
+        id: b.id,
+        x: b.x,
+        y: b.y,
+        width: b.width,
+        height: b.height,
+        isStatic: b.isStatic,
+      })),
+    };
+    frames.push(frameData);
+  }
+
+  // Capture initial frame
   captureFrame();
+
+  return {
+    captureFrame,
+
+    save() {
+      const path = `src/tests/recordings/${name}.html`;
+      const html = generateAnimationHTML({ name, world, frames });
+
+      const dir = 'src/tests/recordings';
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+
+      fs.writeFileSync(path, html);
+      console.log(`Recording saved: ${path} (${frames.length} frames)`);
+      return path;
+    },
+  };
 }
 
-export function captureFrame() {
-  if (!currentRecording) return;
-  currentRecording.frames.push(renderWorldASCII(currentRecording.world));
-}
+// Generate self-contained HTML animation
+function generateAnimationHTML({ name, world, frames }) {
+  const PIXELS_PER_METER = 60;
+  const width = world.width * PIXELS_PER_METER;
+  const height = world.height * PIXELS_PER_METER;
 
-export function stopRecording() {
-  if (!currentRecording) return null;
+  // Assign colors to blocks by order of appearance
+  const blockColors = {};
+  const colors = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c'];
+  let colorIndex = 0;
 
-  const { name, frames } = currentRecording;
-  const path = `src/tests/recordings/${name}.txt`;
-
-  let content = `Recording: ${name}\n`;
-  content += `Frames: ${frames.length}\n\n`;
-
-  for (let i = 0; i < frames.length; i++) {
-    content += `--- Frame ${i + 1} ---\n`;
-    content += frames[i] + '\n\n';
+  for (const frame of frames) {
+    for (const block of frame.blocks) {
+      if (!blockColors[block.id] && !block.isStatic) {
+        blockColors[block.id] = colors[colorIndex % colors.length];
+        colorIndex++;
+      }
+    }
   }
 
-  const dir = 'src/tests/recordings';
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <title>Recording: ${name}</title>
+  <style>
+    body {
+      margin: 20px;
+      font-family: monospace;
+      background: #1a1a2e;
+      color: #eee;
+    }
+    h1 { margin-bottom: 10px; }
+    .info { margin-bottom: 10px; color: #888; }
+    canvas {
+      border: 2px solid #444;
+      background: #16213e;
+    }
+    .controls {
+      margin-top: 10px;
+    }
+    button {
+      padding: 5px 15px;
+      margin-right: 10px;
+      cursor: pointer;
+    }
+    #frameInfo {
+      margin-left: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>${name}</h1>
+  <div class="info">World: ${world.width}m x ${world.height}m | Frames: ${frames.length}</div>
+  <canvas id="canvas" width="${width}" height="${height}"></canvas>
+  <div class="controls">
+    <button id="playBtn">Pause</button>
+    <button id="stepBtn">Step</button>
+    <input type="range" id="speedSlider" min="1" max="60" value="30">
+    <span id="frameInfo">Frame 1/${frames.length}</span>
+  </div>
 
-  fs.writeFileSync(path, content);
-  console.log(`Recording saved: ${path} (${frames.length} frames)`);
+  <script>
+    const PIXELS_PER_METER = ${PIXELS_PER_METER};
+    const frames = ${JSON.stringify(frames, null, 2)};
+    const blockColors = ${JSON.stringify(blockColors)};
 
-  currentRecording = null;
-  return path;
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const playBtn = document.getElementById('playBtn');
+    const stepBtn = document.getElementById('stepBtn');
+    const speedSlider = document.getElementById('speedSlider');
+    const frameInfo = document.getElementById('frameInfo');
+
+    let currentFrame = 0;
+    let playing = true;
+    let lastTime = 0;
+    let frameInterval = 1000 / 30;
+
+    speedSlider.addEventListener('input', () => {
+      frameInterval = 1000 / speedSlider.value;
+    });
+
+    playBtn.addEventListener('click', () => {
+      playing = !playing;
+      playBtn.textContent = playing ? 'Pause' : 'Play';
+    });
+
+    stepBtn.addEventListener('click', () => {
+      playing = false;
+      playBtn.textContent = 'Play';
+      currentFrame = (currentFrame + 1) % frames.length;
+      render();
+    });
+
+    function render() {
+      const frame = frames[currentFrame];
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Draw floor
+      ctx.fillStyle = '#4a5568';
+      ctx.fillRect(0, canvas.height - 5, canvas.width, 5);
+
+      // Draw blocks
+      for (const block of frame.blocks) {
+        const x = block.x * PIXELS_PER_METER;
+        const y = block.y * PIXELS_PER_METER;
+        const w = block.width * PIXELS_PER_METER;
+        const h = block.height * PIXELS_PER_METER;
+
+        if (block.isStatic) {
+          ctx.fillStyle = '#718096';
+        } else {
+          ctx.fillStyle = blockColors[block.id] || '#888';
+        }
+
+        ctx.fillRect(x, y, w, h);
+
+        // Border
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, w, h);
+
+        // Label
+        ctx.fillStyle = '#fff';
+        ctx.font = '12px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(block.id, x + w/2, y + h/2 + 4);
+      }
+
+      frameInfo.textContent = 'Frame ' + (currentFrame + 1) + '/' + frames.length;
+    }
+
+    function animate(time) {
+      if (playing && time - lastTime > frameInterval) {
+        currentFrame = (currentFrame + 1) % frames.length;
+        lastTime = time;
+        render();
+      }
+      requestAnimationFrame(animate);
+    }
+
+    render();
+    requestAnimationFrame(animate);
+  </script>
+
+  <!-- Frame data for inspection -->
+  <details style="margin-top: 20px;">
+    <summary>Raw frame data (JSON)</summary>
+    <pre style="background: #0d1117; padding: 10px; overflow: auto; max-height: 400px;">${JSON.stringify(frames, null, 2)}</pre>
+  </details>
+</body>
+</html>`;
 }
 
-export function dragRight({ world, block, distance, over }) {
+export function dragRight({ world, block, distance, over, recorder }) {
   const startX = block.x + block.width / 2;
   const startY = block.y + block.height / 2;
 
@@ -124,99 +276,29 @@ export function dragRight({ world, block, distance, over }) {
     updateDrag(world, targetX, startY, dt);
     step(world, dt);
 
-    if (currentRecording && i % captureEvery === 0) {
-      captureFrame();
+    if (recorder && i % captureEvery === 0) {
+      recorder.captureFrame();
     }
   }
 
   endDrag(world);
-  if (currentRecording) captureFrame();
+  if (recorder) recorder.captureFrame();
 }
 
-export function dragLeft({ world, block, distance, over }) {
-  dragRight({ world, block, distance: -distance, over });
+export function dragLeft({ world, block, distance, over, recorder }) {
+  dragRight({ world, block, distance: -distance, over, recorder });
 }
 
-export function simulate({ world, time }) {
+export function simulate({ world, time, recorder }) {
   const dt = 1 / 60;
   const steps = Math.round(time / dt);
   const captureEvery = Math.max(1, Math.floor(steps / 20));
 
   for (let i = 0; i < steps; i++) {
     step(world, dt);
-    if (currentRecording && i % captureEvery === 0) {
-      captureFrame();
+    if (recorder && i % captureEvery === 0) {
+      recorder.captureFrame();
     }
   }
-  if (currentRecording) captureFrame();
-}
-
-// Render world state as ASCII art
-function renderWorldASCII(world) {
-  const CHARS_PER_METER = 4;
-  const width = Math.round(world.width * CHARS_PER_METER);
-  const height = Math.round(world.height * CHARS_PER_METER) + 1;
-
-  // Create empty grid
-  const grid = [];
-  for (let y = 0; y < height; y++) {
-    grid.push(new Array(width).fill(' '));
-  }
-
-  // Draw floor
-  for (let x = 0; x < width; x++) {
-    grid[height - 1][x] = '=';
-  }
-
-  // Draw static blocks (walls) first
-  for (const block of world.blocks.filter(b => b.isStatic)) {
-    const left = Math.round(block.x * CHARS_PER_METER);
-    const top = Math.round(block.y * CHARS_PER_METER);
-    const blockWidth = Math.round(block.width * CHARS_PER_METER);
-    const blockHeight = Math.round(block.height * CHARS_PER_METER);
-
-    for (let dy = 0; dy < blockHeight; dy++) {
-      for (let dx = 0; dx < blockWidth; dx++) {
-        const gx = left + dx;
-        const gy = top + dy;
-        if (gx >= 0 && gx < width && gy >= 0 && gy < height - 1) {
-          grid[gy][gx] = '|';
-        }
-      }
-    }
-  }
-
-  // Draw dynamic blocks with fill character
-  const dynamicBlocks = world.blocks.filter(b => !b.isStatic);
-
-  for (let blockIndex = 0; blockIndex < dynamicBlocks.length; blockIndex++) {
-    const block = dynamicBlocks[blockIndex];
-    const fillChar = FILL_CHARS[blockIndex % FILL_CHARS.length];
-
-    const left = Math.round(block.x * CHARS_PER_METER);
-    const top = Math.round(block.y * CHARS_PER_METER);
-    const blockWidth = Math.round(block.width * CHARS_PER_METER);
-    const blockHeight = Math.round(block.height * CHARS_PER_METER);
-
-    // Fill the block area
-    for (let dy = 0; dy < blockHeight; dy++) {
-      for (let dx = 0; dx < blockWidth; dx++) {
-        const gx = left + dx;
-        const gy = top + dy;
-        if (gx >= 0 && gx < width && gy >= 0 && gy < height - 1) {
-          grid[gy][gx] = fillChar;
-        }
-      }
-    }
-  }
-
-  // Convert grid to string, trim empty rows from top
-  let lines = grid.map(row => row.join(''));
-
-  // Remove leading empty rows (all spaces)
-  while (lines.length > 1 && /^ +$/.test(lines[0])) {
-    lines.shift();
-  }
-
-  return lines.join('\n');
+  if (recorder) recorder.captureFrame();
 }

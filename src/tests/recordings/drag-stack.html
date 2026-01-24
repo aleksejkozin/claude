@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Recording: drag-stack</title>
+  <style>
+    body {
+      margin: 20px;
+      font-family: monospace;
+      background: #1a1a2e;
+      color: #eee;
+    }
+    h1 { margin-bottom: 10px; }
+    .info { margin-bottom: 10px; color: #888; }
+    canvas {
+      border: 2px solid #444;
+      background: #16213e;
+    }
+    .controls {
+      margin-top: 10px;
+    }
+    button {
+      padding: 5px 15px;
+      margin-right: 10px;
+      cursor: pointer;
+    }
+    #frameInfo {
+      margin-left: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>drag-stack</h1>
+  <div class="info">World: 4m x 4m | Frames: 20</div>
+  <canvas id="canvas" width="240" height="240"></canvas>
+  <div class="controls">
+    <button id="playBtn">Pause</button>
+    <button id="stepBtn">Step</button>
+    <input type="range" id="speedSlider" min="1" max="60" value="30">
+    <span id="frameInfo">Frame 1/20</span>
+  </div>
+
+  <script>
+    const PIXELS_PER_METER = 60;
+    const frames = [
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.786081993053811,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.7354760258814876,
+        "y": 3.008135832974272,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.7864677955229469,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.7354760258814876,
+        "y": 3.008581435420669,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.7873772712602582,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.7356669981037098,
+        "y": 3.0086678717224826,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.7889252299975529,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.736211719843679,
+        "y": 3.008577745577247,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.7912058580992838,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.7372475966799246,
+        "y": 3.008493133928884,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.7942949581108885,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.738889266624223,
+        "y": 3.0084421334328617,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.7982520023127062,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.741230997752395,
+        "y": 3.008415055995113,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.8031220120315419,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.74434889154074,
+        "y": 3.0084012808585534,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.808937274031423,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.7483029037767943,
+        "y": 3.0083943667992266,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.8157189048557139,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.7531386945235823,
+        "y": 3.0083909087512835,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.8234782735303086,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.7588893182012664,
+        "y": 3.008389180256742,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.8322182925671902,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.7655767644156444,
+        "y": 3.0083883162174505,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.841934586733664,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.7732133597150177,
+        "y": 3.0083878842491414,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.8526165485788495,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.7818030400006122,
+        "y": 3.0083876682751334,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.864248289238844,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.7913425028553482,
+        "y": 3.0083875602898003,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.8768094925781547,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.8018222485951398,
+        "y": 3.008387506297354,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.890276180269884,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.8132275183892956,
+        "y": 3.008387479301149,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.9046213949727153,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.8255391373448087,
+        "y": 3.008387465803045,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.9198158083306132,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.8387342700056892,
+        "y": 3.008387459053992,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.9198158083306132,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.8387342700056892,
+        "y": 3.008387459053992,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  }
+];
+    const blockColors = {"base":"#e74c3c","top":"#3498db"};
+
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const playBtn = document.getElementById('playBtn');
+    const stepBtn = document.getElementById('stepBtn');
+    const speedSlider = document.getElementById('speedSlider');
+    const frameInfo = document.getElementById('frameInfo');
+
+    let currentFrame = 0;
+    let playing = true;
+    let lastTime = 0;
+    let frameInterval = 1000 / 30;
+
+    speedSlider.addEventListener('input', () => {
+      frameInterval = 1000 / speedSlider.value;
+    });
+
+    playBtn.addEventListener('click', () => {
+      playing = !playing;
+      playBtn.textContent = playing ? 'Pause' : 'Play';
+    });
+
+    stepBtn.addEventListener('click', () => {
+      playing = false;
+      playBtn.textContent = 'Play';
+      currentFrame = (currentFrame + 1) % frames.length;
+      render();
+    });
+
+    function render() {
+      const frame = frames[currentFrame];
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Draw floor
+      ctx.fillStyle = '#4a5568';
+      ctx.fillRect(0, canvas.height - 5, canvas.width, 5);
+
+      // Draw blocks
+      for (const block of frame.blocks) {
+        const x = block.x * PIXELS_PER_METER;
+        const y = block.y * PIXELS_PER_METER;
+        const w = block.width * PIXELS_PER_METER;
+        const h = block.height * PIXELS_PER_METER;
+
+        if (block.isStatic) {
+          ctx.fillStyle = '#718096';
+        } else {
+          ctx.fillStyle = blockColors[block.id] || '#888';
+        }
+
+        ctx.fillRect(x, y, w, h);
+
+        // Border
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, w, h);
+
+        // Label
+        ctx.fillStyle = '#fff';
+        ctx.font = '12px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(block.id, x + w/2, y + h/2 + 4);
+      }
+
+      frameInfo.textContent = 'Frame ' + (currentFrame + 1) + '/' + frames.length;
+    }
+
+    function animate(time) {
+      if (playing && time - lastTime > frameInterval) {
+        currentFrame = (currentFrame + 1) % frames.length;
+        lastTime = time;
+        render();
+      }
+      requestAnimationFrame(animate);
+    }
+
+    render();
+    requestAnimationFrame(animate);
+  </script>
+
+  <!-- Frame data for inspection -->
+  <details style="margin-top: 20px;">
+    <summary>Raw frame data (JSON)</summary>
+    <pre style="background: #0d1117; padding: 10px; overflow: auto; max-height: 400px;">[
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.786081993053811,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.7354760258814876,
+        "y": 3.008135832974272,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.7864677955229469,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.7354760258814876,
+        "y": 3.008581435420669,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.7873772712602582,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.7356669981037098,
+        "y": 3.0086678717224826,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.7889252299975529,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.736211719843679,
+        "y": 3.008577745577247,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.7912058580992838,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.7372475966799246,
+        "y": 3.008493133928884,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.7942949581108885,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.738889266624223,
+        "y": 3.0084421334328617,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.7982520023127062,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.741230997752395,
+        "y": 3.008415055995113,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.8031220120315419,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.74434889154074,
+        "y": 3.0084012808585534,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.808937274031423,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.7483029037767943,
+        "y": 3.0083943667992266,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.8157189048557139,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.7531386945235823,
+        "y": 3.0083909087512835,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.8234782735303086,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.7588893182012664,
+        "y": 3.008389180256742,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.8322182925671902,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.7655767644156444,
+        "y": 3.0083883162174505,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.841934586733664,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.7732133597150177,
+        "y": 3.0083878842491414,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.8526165485788495,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.7818030400006122,
+        "y": 3.0083876682751334,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.864248289238844,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.7913425028553482,
+        "y": 3.0083875602898003,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.8768094925781547,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.8018222485951398,
+        "y": 3.008387506297354,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.890276180269884,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.8132275183892956,
+        "y": 3.008387479301149,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.9046213949727153,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.8255391373448087,
+        "y": 3.008387465803045,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.9198158083306132,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.8387342700056892,
+        "y": 3.008387459053992,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  },
+  {
+    "blocks": [
+      {
+        "id": "base",
+        "x": 1.9198158083306132,
+        "y": 3.5,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      },
+      {
+        "id": "top",
+        "x": 1.8387342700056892,
+        "y": 3.008387459053992,
+        "width": 0.5,
+        "height": 0.5,
+        "isStatic": false
+      }
+    ]
+  }
+]</pre>
+  </details>
+</body>
+</html>
