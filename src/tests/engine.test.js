@@ -16,6 +16,14 @@ import {
 } from './test-runner.js';
 
 import {
+  placeOnFloor,
+  placeOn,
+  dragRight,
+  simulate,
+  keyframe,
+} from './test-helpers.js';
+
+import {
   createBlock,
   resetIdCounter,
   setPosition,
@@ -497,18 +505,35 @@ test('findStackAbove finds multi-layer stack', () => {
   assertTrue(stack.includes(top));
 });
 
-test('dragging base lets physics move stack via friction', () => {
+test('dragging base lets physics move stack via friction (readable)', () => {
   const world = createWorld(4, 4);
-  const base = createBlock({ x: 1, y: 3, width: 0.5, height: 0.5, friction: 1.0 });
-  const top = createBlock({ x: 1, y: 2.52, width: 0.5, height: 0.5, friction: 1.0 });
-  addBlock(world, base);
+
+  const base = createBlock({ id: 'base', friction: 1.0 });
+  const top = createBlock({ id: 'top', friction: 1.0 });
+
+  placeOnFloor({ world, block: base, at: 'center' });
+  placeOn({ block: top, on: base });
   addBlock(world, top);
 
-  startDrag(world, base.id, base.x + 0.25, base.y + 0.25);
-  for (let i = 0; i < 5; i++) {
-    updateDrag(world, base.x + 0.25 + 0.1, base.y + 0.25, 0.016);
-    step(world, 0.016);
-  }
+  keyframe(world);
+  /* KEYFRAME
+              @@       
+              @@       
+              ##       
+              ##       
+       ================
+  */
+
+  dragRight({ world, block: base, distance: 0.5, over: 0.3 });
+
+  keyframe(world);
+  /* KEYFRAME
+              @@       
+              @@       
+               ##      
+               ##      
+       ================
+  */
 
   assertTrue(top.vx > 0);
 });
