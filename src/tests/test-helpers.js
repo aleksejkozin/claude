@@ -9,7 +9,7 @@ const FILL_CHARS = ['#', '@', '%', '&', '*', 'O', 'X', '+'];
 
 // Small random offset to simulate human imprecision
 function humanOffset() {
-  return (Math.random() - 0.5) * 0.04; // ±0.02m
+  return (Math.random() - 0.5) * 0.15; // ±0.075m (visible at 4 chars/meter)
 }
 
 // Simulate physics for settling
