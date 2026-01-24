@@ -56,6 +56,19 @@ export function placeOn({ world, block, on }) {
   return block;
 }
 
+// Place a static wall
+export function placeWall({ world, block, at }) {
+  block.isStatic = true;
+  if (at === 'left') {
+    block.x = 0;
+  } else if (at === 'right') {
+    block.x = world.width - block.width;
+  }
+  block.y = world.height - block.height;
+  addBlock(world, block);
+  return block;
+}
+
 // Drag block horizontally
 export function dragRight({ world, block, distance, over }) {
   const startX = block.x + block.width / 2;
@@ -88,7 +101,8 @@ export function simulate({ world, time }) {
   }
 }
 
-const keyframeCounters = new Map();
+// Collect keyframes during execution, update file at end
+const pendingKeyframes = [];
 
 export function keyframe(world) {
   const ascii = renderWorldASCII(world);
@@ -105,37 +119,45 @@ export function keyframe(world) {
 
   if (match) {
     const filePath = match[1];
-
-    // Get current keyframe index for this file
-    const count = keyframeCounters.get(filePath) || 0;
-    keyframeCounters.set(filePath, count + 1);
-
-    updateKeyframeAfterCall(filePath, count, ascii);
+    const lineNumber = parseInt(match[2], 10);
+    pendingKeyframes.push({ filePath, lineNumber, ascii });
   }
 
   return ascii;
 }
 
-// Find the Nth keyframe() call and update/insert comment after it
-function updateKeyframeAfterCall(filePath, index, ascii) {
-  let content = fs.readFileSync(filePath, 'utf-8');
-  const lines = content.split('\n');
-
-  // Find the Nth keyframe( call
-  let callCount = 0;
-  let callLineIndex = -1;
-
-  for (let i = 0; i < lines.length; i++) {
-    if (lines[i].includes('keyframe(')) {
-      if (callCount === index) {
-        callLineIndex = i;
-        break;
-      }
-      callCount++;
+// Update all keyframes at process exit (bottom to top to preserve line numbers)
+if (typeof process !== 'undefined') {
+  process.on('exit', () => {
+    // Group by file
+    const byFile = new Map();
+    for (const kf of pendingKeyframes) {
+      if (!byFile.has(kf.filePath)) byFile.set(kf.filePath, []);
+      byFile.get(kf.filePath).push(kf);
     }
-  }
 
-  if (callLineIndex === -1) return;
+    // Update each file
+    for (const [filePath, keyframes] of byFile) {
+      // Sort by line number descending (bottom to top)
+      keyframes.sort((a, b) => b.lineNumber - a.lineNumber);
+
+      let content = fs.readFileSync(filePath, 'utf-8');
+      let lines = content.split('\n');
+
+      for (const { lineNumber, ascii } of keyframes) {
+        lines = updateKeyframeAtLine(lines, lineNumber, ascii);
+      }
+
+      fs.writeFileSync(filePath, lines.join('\n'));
+    }
+  });
+}
+
+function updateKeyframeAtLine(lines, lineNumber, ascii) {
+  // Line number is 1-based, array is 0-based
+  const callLineIndex = lineNumber - 1;
+
+  if (callLineIndex < 0 || callLineIndex >= lines.length) return lines;
 
   // Look for existing comment block after the call
   let commentStart = -1;
@@ -177,7 +199,7 @@ function updateKeyframeAfterCall(filePath, index, ascii) {
     lines.splice(callLineIndex + 1, 0, ...newComment);
   }
 
-  fs.writeFileSync(filePath, lines.join('\n'));
+  return lines;
 }
 
 // Render world state as ASCII art
@@ -197,7 +219,25 @@ function renderWorldASCII(world) {
     grid[height - 1][x] = '=';
   }
 
-  // Draw each block with fill character
+  // Draw static blocks (walls) first
+  for (const block of world.blocks.filter(b => b.isStatic)) {
+    const left = Math.round(block.x * CHARS_PER_METER);
+    const top = Math.round(block.y * CHARS_PER_METER);
+    const blockWidth = Math.round(block.width * CHARS_PER_METER);
+    const blockHeight = Math.round(block.height * CHARS_PER_METER);
+
+    for (let dy = 0; dy < blockHeight; dy++) {
+      for (let dx = 0; dx < blockWidth; dx++) {
+        const gx = left + dx;
+        const gy = top + dy;
+        if (gx >= 0 && gx < width && gy >= 0 && gy < height - 1) {
+          grid[gy][gx] = '|';
+        }
+      }
+    }
+  }
+
+  // Draw dynamic blocks with fill character
   const dynamicBlocks = world.blocks.filter(b => !b.isStatic);
 
   for (let blockIndex = 0; blockIndex < dynamicBlocks.length; blockIndex++) {

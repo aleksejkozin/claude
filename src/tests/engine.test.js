@@ -18,6 +18,7 @@ import {
 import {
   placeOnFloor,
   placeOn,
+  placeWall,
   dragRight,
   simulate,
   keyframe,
@@ -529,11 +530,80 @@ test('dragging base lets physics move stack via friction (readable)', () => {
   /*
             @@       
             @@       
-            ##       
-            ##       
+             ##      
+             ##      
      ================
   */
 
   assertTrue(top.vx > 0);
+});
+
+test('stacked blocks maintain relative positions when pushed against wall', () => {
+  const world = createWorld(4, 4);
+
+  const wall = createBlock({ id: 'wall', width: 0.3, height: 2.0 });
+  const base = createBlock({ id: 'base', friction: 1.0 });
+  const mid = createBlock({ id: 'mid', friction: 1.0 });
+  const top = createBlock({ id: 'top', friction: 1.0 });
+
+  placeWall({ world, block: wall, at: 'right' });
+  placeOnFloor({ world, block: base, at: 'center' });
+  placeOn({ world, block: mid, on: base });
+  placeOn({ world, block: top, on: mid });
+
+  keyframe(world);
+  /*
+                    |
+                    |
+            %%      |
+            %%      |
+            @@      |
+            @@      |
+            ##      |
+            ##      |
+     ================
+  */
+
+  const offsetMidBase = mid.x - base.x;
+  const offsetTopMid = top.x - mid.x;
+
+  dragRight({ world, block: base, distance: 2.0, over: 0.5 });
+
+  keyframe(world);
+  /*
+                    |
+                    |
+               %%   |
+               %%   |
+               @@   |
+               @@   |
+               ##   |
+               ##   |
+     ================
+  */
+
+  dragRight({ world, block: base, distance: 0.5, over: 0.3 });
+
+  keyframe(world);
+  /*
+                    |
+                    |
+                %%  |
+                %%  |
+                @@  |
+                @@  |
+                ##  |
+                ##  |
+     ================
+  */
+
+  const newOffsetMidBase = mid.x - base.x;
+  const newOffsetTopMid = top.x - mid.x;
+
+  const driftMidBase = Math.abs(newOffsetMidBase - offsetMidBase);
+  const driftTopMid = Math.abs(newOffsetTopMid - offsetTopMid);
+
+  assertTrue(driftMidBase < 0.1, `mid-base offset changed by ${driftMidBase.toFixed(3)}m`);
+  assertTrue(driftTopMid < 0.1, `top-mid offset changed by ${driftTopMid.toFixed(3)}m`);
 });
 
