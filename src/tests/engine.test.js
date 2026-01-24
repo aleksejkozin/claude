@@ -539,7 +539,8 @@ test('stacked blocks maintain relative positions when pushed against boundary', 
 
   const recorder = createRecorder({ world, name: 'stack-against-boundary' });
   dragRight({ world, block: base, distance: 3.0, over: 0.5, recorder });
-  dragRight({ world, block: base, distance: 1.0, over: 0.3, recorder });
+  dragRight({ world, block: base, distance: 1.0, over: 0.5, recorder });
+  dragRight({ world, block: base, distance: 1.0, over: 0.5, recorder });
   recorder.save();
 
   const newOffsetMidBase = mid.x - base.x;
