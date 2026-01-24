@@ -517,10 +517,10 @@ test('dragging base lets physics move stack via friction (readable)', () => {
 
   keyframe(world);
   /* KEYFRAME
-       .......@@.......
-       .......@@.......
-       .......##.......
-       .......##.......
+              @@       
+              @@       
+              ##       
+              ##       
        ================
   */
 
@@ -528,10 +528,10 @@ test('dragging base lets physics move stack via friction (readable)', () => {
 
   keyframe(world);
   /* KEYFRAME
-       .......@@.......
-       .......@@.......
-       ........##......
-       ........##......
+              @@       
+              @@       
+               ##      
+               ##      
        ================
   */
 

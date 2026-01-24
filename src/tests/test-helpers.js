@@ -154,7 +154,7 @@ function renderWorldASCII(world) {
   // Create empty grid
   const grid = [];
   for (let y = 0; y < height; y++) {
-    grid.push(new Array(width).fill('.'));
+    grid.push(new Array(width).fill(' '));
   }
 
   // Draw floor
@@ -189,8 +189,8 @@ function renderWorldASCII(world) {
   // Convert grid to string, trim empty rows from top
   let lines = grid.map(row => row.join(''));
 
-  // Remove leading empty rows (all dots)
-  while (lines.length > 1 && /^\.+$/.test(lines[0])) {
+  // Remove leading empty rows (all spaces)
+  while (lines.length > 1 && /^ +$/.test(lines[0])) {
     lines.shift();
   }
 
