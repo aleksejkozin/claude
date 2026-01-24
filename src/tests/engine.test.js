@@ -567,33 +567,33 @@ test('stacked blocks maintain relative positions when pushed against wall', () =
   const offsetMidBase = mid.x - base.x;
   const offsetTopMid = top.x - mid.x;
 
-  dragRight({ world, block: base, distance: 2.0, over: 0.5 });
+  dragRight({ world, block: base, distance: 3.0, over: 0.5 });
 
   keyframe(world);
   /*
                     |
                     |
-               %%   |
-               %%   |
-               @@   |
-               @@   |
-               ##   |
-               ##   |
+                %%  |
+                %%  |
+                @@  |
+                @@  |
+                 ## |
+                 ## |
      ================
   */
 
-  dragRight({ world, block: base, distance: 0.5, over: 0.3 });
+  dragRight({ world, block: base, distance: 1.0, over: 0.3 });
 
   keyframe(world);
   /*
                     |
                     |
-                %%  |
-                %%  |
-                @@  |
-                @@  |
-                ##  |
-                ##  |
+                 %% |
+                 %% |
+                 @@ |
+                 @@ |
+                  ##|
+                  ##|
      ================
   */
 
