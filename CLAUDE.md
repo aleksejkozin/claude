@@ -47,55 +47,25 @@ assertApprox(block.y, 2.45, 0.01)  // magic numbers
 
 ### Test DSL (`src/tests/test-helpers.js`)
 
-Helper functions eliminate magic numbers by using semantic placement:
+**No magic numbers.** Use words for positions ('left', 'center', 'right') and relative placement ('on top of base') instead of coordinates. The reader should understand the test setup without calculating positions.
+
+**Human-like placement.** Blocks aren't placed perfectly—slight random offset and settling time simulate how a person would place them. This makes tests more realistic and catches edge cases.
+
+**All parameters named.** If a function uses named parameters, all parameters must be named for consistency.
+
+**Keyframe visualization.** Insert `keyframe(world)` to capture ASCII art of the current state. Running the test:
+1. Prints the keyframe to terminal
+2. Updates the `/*` comment block after the call in the source file
+
+The keyframe system finds calls by searching for `keyframe(` in source, not by marker comments. Each block uses a different fill character (##, @@, %%, etc.).
 
 ```javascript
-const base = createBlock({ id: 'base', friction: 1.0 });
-const top = createBlock({ id: 'top', friction: 1.0 });
-
-placeOnFloor({ world, block: base, at: 'center' });
-placeOn({ world, block: top, on: base });
-
 keyframe(world);
 /*
-         @@
-         @@
-         ##
-         ##
-  ================
+       @@
+       ##
+  ========
 */
-
-dragRight({ world, block: base, distance: 0.5, over: 0.3 });
-
-keyframe(world);
-/*
-         @@
-         @@
-          ##
-          ##
-  ================
-*/
-```
-
-**Placement functions:**
-- `placeOnFloor({ world, block, at })` — `at`: 'left' | 'center' | 'right'
-- `placeOn({ world, block, on })` — stacks block on another
-- `dragRight/dragLeft({ world, block, distance, over })` — drag over time
-- `simulate({ world, time })` — run physics
-
-**Human-like placement:** Functions add slight random offset (±0.02m) and settling time to simulate imperfect human placement. Blocks bounce and settle naturally.
-
-**Keyframe visualization:**
-- `keyframe(world)` captures ASCII art of current state
-- Prints to terminal when test runs
-- Updates the `/*` comment block after the call in the source file
-- Each block rendered with different fill character: `##`, `@@`, `%%`, etc.
-- Floor shown as `================`
-
-**Running single test by name:**
-```bash
-node src/tests/engine.test.js "readable"
-node src/tests/engine.test.js "collision"
 ```
 
 ### Bug Fixing Workflow
