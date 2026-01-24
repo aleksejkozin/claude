@@ -14,12 +14,12 @@ Tower Builder is a physics-based tower building game where players drag and drop
 
 ## Development
 **Run the game:** Open `index.html` in a browser (no build step required).
-**Run tests:** Open `test.html` in a browser. Tests run automatically and display results.
+**Run tests:** Open `test.html` in a browser or run `node src/tests/engine.test.js`
 
 ### Testing Policy
 - **Every feature must have at least 1 test**
 - **Run tests before pushing** - verify all tests pass
-- Tests run in browser (`test.html`) or via node: `node --experimental-vm-modules src/tests/engine.test.js`
+- Filter tests by name: `node src/tests/engine.test.js "collision"`
 
 ### Test Readability
 Tests should be readable without running the code. Use semantic assertions that express intent:
@@ -44,6 +44,59 @@ assertApprox(block.y, 2.45, 0.01)  // magic numbers
 - No comments explaining assertions - the assertion name should be self-documenting
 - Simple comparisons like `assertTrue(x < y)` are fine when obvious
 - Don't wrap simple operators (`assertLess`, `assertGreater`) - just use `assertTrue(a < b)`
+
+### Test DSL (`src/tests/test-helpers.js`)
+
+Helper functions eliminate magic numbers by using semantic placement:
+
+```javascript
+const base = createBlock({ id: 'base', friction: 1.0 });
+const top = createBlock({ id: 'top', friction: 1.0 });
+
+placeOnFloor({ world, block: base, at: 'center' });
+placeOn({ world, block: top, on: base });
+
+keyframe(world);
+/*
+         @@
+         @@
+         ##
+         ##
+  ================
+*/
+
+dragRight({ world, block: base, distance: 0.5, over: 0.3 });
+
+keyframe(world);
+/*
+         @@
+         @@
+          ##
+          ##
+  ================
+*/
+```
+
+**Placement functions:**
+- `placeOnFloor({ world, block, at })` — `at`: 'left' | 'center' | 'right'
+- `placeOn({ world, block, on })` — stacks block on another
+- `dragRight/dragLeft({ world, block, distance, over })` — drag over time
+- `simulate({ world, time })` — run physics
+
+**Human-like placement:** Functions add slight random offset (±0.02m) and settling time to simulate imperfect human placement. Blocks bounce and settle naturally.
+
+**Keyframe visualization:**
+- `keyframe(world)` captures ASCII art of current state
+- Prints to terminal when test runs
+- Updates the `/*` comment block after the call in the source file
+- Each block rendered with different fill character: `##`, `@@`, `%%`, etc.
+- Floor shown as `================`
+
+**Running single test by name:**
+```bash
+node src/tests/engine.test.js "readable"
+node src/tests/engine.test.js "collision"
+```
 
 ### Bug Fixing Workflow
 When fixing bugs:

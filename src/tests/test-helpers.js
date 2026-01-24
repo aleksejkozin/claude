@@ -7,6 +7,20 @@ import fs from 'fs';
 // Fill characters for different blocks
 const FILL_CHARS = ['#', '@', '%', '&', '*', 'O', 'X', '+'];
 
+// Small random offset to simulate human imprecision
+function humanOffset() {
+  return (Math.random() - 0.5) * 0.04; // ±0.02m
+}
+
+// Simulate physics for settling
+function settle(world, time = 0.2) {
+  const dt = 1 / 60;
+  const steps = Math.round(time / dt);
+  for (let i = 0; i < steps; i++) {
+    step(world, dt);
+  }
+}
+
 // Place block on floor at horizontal position
 // at: 'left' | 'center' | 'right' | number (0-1 as fraction of world width)
 export function placeOnFloor({ world, block, at }) {
@@ -25,24 +39,20 @@ export function placeOnFloor({ world, block, at }) {
     throw new Error(`Invalid 'at' value: ${at}`);
   }
 
-  block.x = x;
+  block.x = x + humanOffset();
   block.y = floorY;
   addBlock(world, block);
+  settle(world);
   return block;
 }
 
-// Stack block on top of another block (centered)
-export function placeOn({ block, on }) {
+// Stack block on top of another block with slight imprecision
+export function placeOn({ world, block, on }) {
   const base = on;
-  block.x = base.x + (base.width - block.width) / 2;
-  block.y = base.y - block.height;
-  return block;
-}
-
-// Place block on top and add to world
-export function placeOnAndAdd({ world, block, on }) {
-  placeOn({ block, on });
+  block.x = base.x + (base.width - block.width) / 2 + humanOffset();
+  block.y = base.y - block.height - 0.05; // slight drop
   addBlock(world, block);
+  settle(world);
   return block;
 }
 
@@ -70,7 +80,6 @@ export function dragLeft({ world, block, distance, over }) {
   dragRight({ world, block, distance: -distance, over });
 }
 
-// Simulate physics for a duration
 export function simulate({ world, time }) {
   const dt = 1 / 60;
   const steps = Math.round(time / dt);
@@ -79,10 +88,8 @@ export function simulate({ world, time }) {
   }
 }
 
-// Track keyframes per file for ordered updates
 const keyframeCounters = new Map();
 
-// Capture keyframe and update source file directly
 export function keyframe(world) {
   const ascii = renderWorldASCII(world);
 
@@ -91,7 +98,7 @@ export function keyframe(world) {
   ascii.split('\n').forEach(line => console.log('  ' + line));
   console.log('');
 
-  // Find caller file from stack trace
+  // Find caller file and line from stack trace
   const stack = new Error().stack;
   const callerLine = stack.split('\n')[2];
   const match = callerLine.match(/file:\/\/(.+):(\d+):\d+/);
@@ -103,56 +110,72 @@ export function keyframe(world) {
     const count = keyframeCounters.get(filePath) || 0;
     keyframeCounters.set(filePath, count + 1);
 
-    updateKeyframeByIndex(filePath, count, ascii);
+    updateKeyframeAfterCall(filePath, count, ascii);
   }
 
   return ascii;
 }
 
-// Update the Nth KEYFRAME comment in the file
-function updateKeyframeByIndex(filePath, index, ascii) {
+// Find the Nth keyframe() call and update/insert comment after it
+function updateKeyframeAfterCall(filePath, index, ascii) {
   let content = fs.readFileSync(filePath, 'utf-8');
   const lines = content.split('\n');
 
-  // Find all KEYFRAME comments
-  let keyframeCount = 0;
-  let keyframeStart = -1;
-  let keyframeEnd = -1;
+  // Find the Nth keyframe( call
+  let callCount = 0;
+  let callLineIndex = -1;
 
   for (let i = 0; i < lines.length; i++) {
-    if (lines[i].includes('/* KEYFRAME')) {
-      if (keyframeCount === index) {
-        keyframeStart = i;
-        // Find closing */
-        for (let j = i; j < lines.length; j++) {
-          if (lines[j].includes('*/')) {
-            keyframeEnd = j;
-            break;
-          }
-        }
+    if (lines[i].includes('keyframe(')) {
+      if (callCount === index) {
+        callLineIndex = i;
         break;
       }
-      keyframeCount++;
+      callCount++;
     }
   }
 
-  if (keyframeStart === -1 || keyframeEnd === -1) {
-    return; // No keyframe comment found
+  if (callLineIndex === -1) return;
+
+  // Look for existing comment block after the call
+  let commentStart = -1;
+  let commentEnd = -1;
+
+  for (let i = callLineIndex + 1; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
+    if (trimmed === '') continue; // skip blank lines
+    if (trimmed.startsWith('/*')) {
+      commentStart = i;
+      for (let j = i; j < lines.length; j++) {
+        if (lines[j].includes('*/')) {
+          commentEnd = j;
+          break;
+        }
+      }
+      break;
+    }
+    // Hit non-comment code, stop looking
+    break;
   }
 
-  // Get indentation from the keyframe line
-  const indent = lines[keyframeStart].match(/^\s*/)[0];
+  // Get indentation from the keyframe call line
+  const indent = lines[callLineIndex].match(/^\s*/)[0];
 
-  // Build new keyframe comment
-  const asciiLines = ascii.split('\n').map(line => indent + '     ' + line);
-  const newKeyframe = [
-    indent + '/* KEYFRAME',
+  // Build new comment
+  const asciiLines = ascii.split('\n').map(line => indent + '   ' + line);
+  const newComment = [
+    indent + '/*',
     ...asciiLines,
     indent + '*/'
   ];
 
-  // Replace the old keyframe
-  lines.splice(keyframeStart, keyframeEnd - keyframeStart + 1, ...newKeyframe);
+  if (commentStart !== -1 && commentEnd !== -1) {
+    // Replace existing comment
+    lines.splice(commentStart, commentEnd - commentStart + 1, ...newComment);
+  } else {
+    // Insert new comment after the keyframe call
+    lines.splice(callLineIndex + 1, 0, ...newComment);
+  }
 
   fs.writeFileSync(filePath, lines.join('\n'));
 }
