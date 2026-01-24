@@ -58,7 +58,6 @@ Placement functions:
 
     placeOnFloor({ world, block, at })     // at: 'left'|'center'|'right'|0-1
     placeOn({ world, block, on })          // stack block on another
-    placeWall({ world, block, at })        // static wall at 'left' or 'right'
 
 Action functions:
 

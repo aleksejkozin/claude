@@ -53,19 +53,6 @@ export function placeOn({ world, block, on }) {
   return block;
 }
 
-// Place a static wall
-export function placeWall({ world, block, at }) {
-  block.isStatic = true;
-  if (at === 'left') {
-    block.x = 0;
-  } else if (at === 'right') {
-    block.x = world.width - block.width;
-  }
-  block.y = world.height - block.height;
-  addBlock(world, block);
-  return block;
-}
-
 // Create a recorder object (no global state)
 export function createRecorder({ world, name }) {
   const frames = [];

@@ -18,7 +18,6 @@ import {
 import {
   placeOnFloor,
   placeOn,
-  placeWall,
   dragRight,
   simulate,
   createRecorder,
@@ -523,16 +522,14 @@ test('dragging base lets physics move stack via friction (readable)', () => {
   assertTrue(top.vx > 0);
 });
 
-// Recording: src/tests/recordings/stack-against-wall.html
-test('stacked blocks maintain relative positions when pushed against wall', () => {
+// Recording: src/tests/recordings/stack-against-boundary.html
+test('stacked blocks maintain relative positions when pushed against boundary', () => {
   const world = createWorld(4, 4);
 
-  const wall = createBlock({ id: 'wall', width: 0.3, height: 2.0 });
   const base = createBlock({ id: 'base', friction: 1.0 });
   const mid = createBlock({ id: 'mid', friction: 1.0 });
   const top = createBlock({ id: 'top', friction: 1.0 });
 
-  placeWall({ world, block: wall, at: 'right' });
   placeOnFloor({ world, block: base, at: 'center' });
   placeOn({ world, block: mid, on: base });
   placeOn({ world, block: top, on: mid });
@@ -540,7 +537,7 @@ test('stacked blocks maintain relative positions when pushed against wall', () =
   const offsetMidBase = mid.x - base.x;
   const offsetTopMid = top.x - mid.x;
 
-  const recorder = createRecorder({ world, name: 'stack-against-wall' });
+  const recorder = createRecorder({ world, name: 'stack-against-boundary' });
   dragRight({ world, block: base, distance: 3.0, over: 0.5, recorder });
   dragRight({ world, block: base, distance: 1.0, over: 0.3, recorder });
   recorder.save();
