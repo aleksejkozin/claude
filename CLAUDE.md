@@ -13,66 +13,53 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Tower Builder is a physics-based tower building game where players drag and drop blocks to build towers. Currently in dev mode with a physics engine - game mode with enemies is planned for later.
 
 ## Development
-**Run the game:** Open `index.html` in a browser (no build step required).
-**Run tests:** Open `test.html` in a browser or run `node src/tests/engine.test.js`
+
+Run the game: open index.html in a browser (no build step required).
+Run tests: open test.html in a browser or run node src/tests/engine.test.js
+Filter tests by name: node src/tests/engine.test.js "collision"
 
 ### Testing Policy
-- **Every feature must have at least 1 test**
-- **Run tests before pushing** - verify all tests pass
-- Filter tests by name: `node src/tests/engine.test.js "collision"`
+
+Every feature must have at least one test. Run tests before pushing.
 
 ### Test Readability
-Tests should be readable without running the code. Use semantic assertions that express intent:
 
-**Good - domain assertions that hide coordinate math:**
-```javascript
-assertStacked(top, bottom)      // top block resting on bottom
-assertAbove(top, bottom)        // top is above bottom
-assertBounced(block)            // block has upward velocity
-assertFollowedHorizontally(follower, leader, startX1, startX2)
-assertNoOverlap(block1, block2)
-```
+Tests should be readable without running the code. Use semantic assertions that express intent.
 
-**Bad - raw coordinate checks require mental parsing:**
-```javascript
-assertTrue(block1.y + block1.height < block2.y + 0.1)  // what does this mean?
-assertApprox(block.y, 2.45, 0.01)  // magic numbers
-```
+Good - domain assertions that hide coordinate math:
 
-**Rules:**
-- Function names should express invariants, not implementation
-- No comments explaining assertions - the assertion name should be self-documenting
-- Simple comparisons like `assertTrue(x < y)` are fine when obvious
-- Don't wrap simple operators (`assertLess`, `assertGreater`) - just use `assertTrue(a < b)`
+    assertStacked(top, bottom)
+    assertAbove(top, bottom)
+    assertBounced(block)
+    assertFollowedHorizontally(follower, leader, startX1, startX2)
 
-### Test DSL (`src/tests/test-helpers.js`)
+Bad - raw coordinate checks require mental parsing:
 
-**No magic numbers.** Use words for positions ('left', 'center', 'right') and relative placement ('on top of base') instead of coordinates. The reader should understand the test setup without calculating positions.
+    assertTrue(block1.y + block1.height < block2.y + 0.1)
+    assertApprox(block.y, 2.45, 0.01)
 
-**Human-like placement.** Blocks aren't placed perfectly—slight random offset and settling time simulate how a person would place them. This makes tests more realistic and catches edge cases.
+Function names should express invariants, not implementation. No comments explaining assertions - the name should be self-documenting. Simple comparisons like assertTrue(x < y) are fine when obvious.
 
-**All parameters named.** If a function uses named parameters, all parameters must be named for consistency.
+### Test DSL (src/tests/test-helpers.js)
 
-**Keyframe visualization.** Insert `keyframe(world)` to capture ASCII art of the current state. Running the test:
-1. Prints the keyframe to terminal
-2. Updates the `/*` comment block after the call in the source file
+No magic numbers. Use words for positions ('left', 'center', 'right') and relative placement ('on top of base') instead of coordinates. The reader should understand the test setup without calculating positions.
 
-The keyframe system finds calls by searching for `keyframe(` in source, not by marker comments. Each block uses a different fill character (##, @@, %%, etc.).
+Human-like placement. Blocks aren't placed perfectly - slight random offset and settling time simulate how a person would place them.
 
-```javascript
-keyframe(world);
-/*
-       @@
-       ##
-  ========
-*/
-```
+All parameters named. If a function uses named parameters, all must be named.
+
+Keyframe visualization. Call keyframe(world) to capture ASCII art of the current state. Running the test prints the keyframe to terminal and updates the comment block after the call in source. The system finds calls by searching for "keyframe(" in source, not by marker comments. Each block uses a different fill character (##, @@, %%).
+
+    keyframe(world);
+    /*
+           @@
+           ##
+      ========
+    */
 
 ### Bug Fixing Workflow
-When fixing bugs:
-1. **Write a unit test first** that reproduces the bug
-2. **Prove the test covers the bug** (test should fail before the fix)
-3. **Then fix the code** and verify the test passes
+
+Write a unit test first that reproduces the bug. Prove the test covers the bug (test should fail before the fix). Then fix the code and verify the test passes.
 
 ## Architecture
 The codebase follows a strict separation between engine logic and rendering:
