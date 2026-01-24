@@ -48,14 +48,16 @@ Human-like placement. Blocks aren't placed perfectly - slight random offset and 
 
 All parameters named. If a function uses named parameters, all must be named.
 
-Keyframe visualization. Call keyframe(world) to capture ASCII art of the current state. Running the test prints the keyframe to terminal and updates the comment block after the call in source. The system finds calls by searching for "keyframe(" in source, not by marker comments. Each block uses a different fill character (##, @@, %%).
+Animated recordings. Wrap test actions with startRecording/stopRecording to capture ASCII animation frames. Recordings save to src/tests/recordings/ as text files. Each test with a recording includes a comment showing the file path. Each block uses a different fill character (##, @@, %%).
 
-    keyframe(world);
-    /*
-           @@
-           ##
-      ========
-    */
+    // Recording: src/tests/recordings/drag-stack.txt
+    test('dragging base moves stack via friction', () => {
+      // ... setup blocks ...
+      startRecording({ world, name: 'drag-stack' });
+      dragRight({ world, block: base, distance: 0.5, over: 0.3 });
+      stopRecording();
+      // ... assertions ...
+    });
 
 ### Bug Fixing Workflow
 

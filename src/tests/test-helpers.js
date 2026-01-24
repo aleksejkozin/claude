@@ -1,5 +1,5 @@
 // Test helpers for readable tests
-// Provides placement functions and keyframe visualization
+// Provides placement functions and animated ASCII recordings
 
 import { addBlock, startDrag, updateDrag, endDrag, step } from '../engine/world.js';
 import fs from 'fs';
@@ -69,7 +69,45 @@ export function placeWall({ world, block, at }) {
   return block;
 }
 
-// Drag block horizontally
+// Recording state
+let currentRecording = null;
+
+export function startRecording({ world, name }) {
+  currentRecording = { name, world, frames: [] };
+  captureFrame();
+}
+
+export function captureFrame() {
+  if (!currentRecording) return;
+  currentRecording.frames.push(renderWorldASCII(currentRecording.world));
+}
+
+export function stopRecording() {
+  if (!currentRecording) return null;
+
+  const { name, frames } = currentRecording;
+  const path = `src/tests/recordings/${name}.txt`;
+
+  let content = `Recording: ${name}\n`;
+  content += `Frames: ${frames.length}\n\n`;
+
+  for (let i = 0; i < frames.length; i++) {
+    content += `--- Frame ${i + 1} ---\n`;
+    content += frames[i] + '\n\n';
+  }
+
+  const dir = 'src/tests/recordings';
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+
+  fs.writeFileSync(path, content);
+  console.log(`Recording saved: ${path} (${frames.length} frames)`);
+
+  currentRecording = null;
+  return path;
+}
+
 export function dragRight({ world, block, distance, over }) {
   const startX = block.x + block.width / 2;
   const startY = block.y + block.height / 2;
@@ -79,14 +117,20 @@ export function dragRight({ world, block, distance, over }) {
   const dt = 1 / 60;
   const steps = Math.round(over / dt);
   const distancePerStep = distance / steps;
+  const captureEvery = Math.max(1, Math.floor(steps / 20));
 
   for (let i = 0; i < steps; i++) {
     const targetX = startX + (i + 1) * distancePerStep;
     updateDrag(world, targetX, startY, dt);
     step(world, dt);
+
+    if (currentRecording && i % captureEvery === 0) {
+      captureFrame();
+    }
   }
 
   endDrag(world);
+  if (currentRecording) captureFrame();
 }
 
 export function dragLeft({ world, block, distance, over }) {
@@ -96,110 +140,15 @@ export function dragLeft({ world, block, distance, over }) {
 export function simulate({ world, time }) {
   const dt = 1 / 60;
   const steps = Math.round(time / dt);
+  const captureEvery = Math.max(1, Math.floor(steps / 20));
+
   for (let i = 0; i < steps; i++) {
     step(world, dt);
-  }
-}
-
-// Collect keyframes during execution, update file at end
-const pendingKeyframes = [];
-
-export function keyframe(world) {
-  const ascii = renderWorldASCII(world);
-
-  // Print to console
-  console.log('\n  KEYFRAME:');
-  ascii.split('\n').forEach(line => console.log('  ' + line));
-  console.log('');
-
-  // Find caller file and line from stack trace
-  const stack = new Error().stack;
-  const callerLine = stack.split('\n')[2];
-  const match = callerLine.match(/file:\/\/(.+):(\d+):\d+/);
-
-  if (match) {
-    const filePath = match[1];
-    const lineNumber = parseInt(match[2], 10);
-    pendingKeyframes.push({ filePath, lineNumber, ascii });
-  }
-
-  return ascii;
-}
-
-// Update all keyframes at process exit (bottom to top to preserve line numbers)
-if (typeof process !== 'undefined') {
-  process.on('exit', () => {
-    // Group by file
-    const byFile = new Map();
-    for (const kf of pendingKeyframes) {
-      if (!byFile.has(kf.filePath)) byFile.set(kf.filePath, []);
-      byFile.get(kf.filePath).push(kf);
+    if (currentRecording && i % captureEvery === 0) {
+      captureFrame();
     }
-
-    // Update each file
-    for (const [filePath, keyframes] of byFile) {
-      // Sort by line number descending (bottom to top)
-      keyframes.sort((a, b) => b.lineNumber - a.lineNumber);
-
-      let content = fs.readFileSync(filePath, 'utf-8');
-      let lines = content.split('\n');
-
-      for (const { lineNumber, ascii } of keyframes) {
-        lines = updateKeyframeAtLine(lines, lineNumber, ascii);
-      }
-
-      fs.writeFileSync(filePath, lines.join('\n'));
-    }
-  });
-}
-
-function updateKeyframeAtLine(lines, lineNumber, ascii) {
-  // Line number is 1-based, array is 0-based
-  const callLineIndex = lineNumber - 1;
-
-  if (callLineIndex < 0 || callLineIndex >= lines.length) return lines;
-
-  // Look for existing comment block after the call
-  let commentStart = -1;
-  let commentEnd = -1;
-
-  for (let i = callLineIndex + 1; i < lines.length; i++) {
-    const trimmed = lines[i].trim();
-    if (trimmed === '') continue; // skip blank lines
-    if (trimmed.startsWith('/*')) {
-      commentStart = i;
-      for (let j = i; j < lines.length; j++) {
-        if (lines[j].includes('*/')) {
-          commentEnd = j;
-          break;
-        }
-      }
-      break;
-    }
-    // Hit non-comment code, stop looking
-    break;
   }
-
-  // Get indentation from the keyframe call line
-  const indent = lines[callLineIndex].match(/^\s*/)[0];
-
-  // Build new comment
-  const asciiLines = ascii.split('\n').map(line => indent + '   ' + line);
-  const newComment = [
-    indent + '/*',
-    ...asciiLines,
-    indent + '*/'
-  ];
-
-  if (commentStart !== -1 && commentEnd !== -1) {
-    // Replace existing comment
-    lines.splice(commentStart, commentEnd - commentStart + 1, ...newComment);
-  } else {
-    // Insert new comment after the keyframe call
-    lines.splice(callLineIndex + 1, 0, ...newComment);
-  }
-
-  return lines;
+  if (currentRecording) captureFrame();
 }
 
 // Render world state as ASCII art
