@@ -14,6 +14,8 @@ When fixing bugs, prefer well-known algorithmic solutions over special-case patc
 
 Never weaken tests to hide bugs. If a test fails, fix the code, not the test. Tests define correct behavior - loosening tolerances or removing assertions to make tests pass is forbidden. The only valid reasons to change a test are: (1) the test itself is wrong, or (2) requirements changed.
 
+No cheating in physics. Forces must propagate naturally through contacts via the constraint solver. Never forcibly restore block positions or manipulate coordinates outside the physics system. If stacked blocks drift during drag, fix the constraint solver - don't cache positions and reset them afterward.
+
 ## Project Overview
 
 Tower Builder is a physics-based tower building game where players drag and drop blocks to build towers. Currently in dev mode with a physics engine - game mode with enemies is planned for later.
@@ -184,11 +186,41 @@ Each frame, with timestep `dt` (seconds):
 
 1. **Apply Gravity**: Each non-static, non-dragging block gets `vy += 9.8 * dt`
 2. **Update Positions**: `x += vx * dt`, `y += vy * dt`
-3. **Collision Resolution** (4 iterations for stability):
-   - Check every pair of blocks for AABB overlap
-   - If colliding, separate and apply impulse
-4. **World Constraints**: Bounce off walls/floor
-5. **Apply Damping**: Multiply velocities by 0.99
+3. **Detect All Contacts**: Build list of all touching block pairs with contact normals
+4. **Solve Velocity Constraints** (8 iterations): Sequential impulses propagate through contact graph
+5. **Solve Position Constraints** (3 iterations): Correct remaining penetration
+6. **World Constraints**: Bounce off walls/floor
+7. **Apply Damping**: Multiply velocities by 0.99
+
+### Constraint-Based Physics (Sequential Impulses)
+
+Instead of solving collisions pair-by-pair independently, we use a constraint-based approach inspired by Box2D:
+
+1. **Detect all contacts** at once, building a contact graph
+2. **Iterate multiple times** through all contacts, applying impulses
+3. Each iteration, impulses **propagate through the stack** - when block A pushes block B, block B pushes block C in the next iteration
+4. After enough iterations, the entire stack reaches consistent velocities
+
+**Why this works for stacks:** With pair-by-pair collision, dragging the bottom block only affects blocks it directly touches. With sequential impulses, the force propagates: base→middle→top. Each iteration brings the stack closer to moving together.
+
+**Contact data structure:**
+```javascript
+{
+  block1, block2,           // the two touching blocks
+  normalX, normalY,         // contact normal (points from block2 to block1)
+  tangentX, tangentY,       // friction direction (perpendicular to normal)
+  penetration,              // how deep they overlap
+  friction, bounciness,     // effective values for this pair
+  normalImpulse,            // accumulated normal impulse (prevents pulling)
+  tangentImpulse            // accumulated friction impulse
+}
+```
+
+**Solver constants:**
+- `VELOCITY_ITERATIONS = 8` — passes through contacts for velocity
+- `POSITION_ITERATIONS = 3` — passes for position correction
+- `POSITION_SLOP = 0.005` m — allowed penetration (prevents jitter)
+- `POSITION_CORRECTION = 0.2` — fraction of penetration fixed per iteration
 
 ### Collision Detection and Response (Minimum Penetration Axis)
 
@@ -270,12 +302,14 @@ With `bounciness ≤ 1`, energy can only stay same or decrease, never increase.
 
 ### Friction
 
-Applied tangent to collision (perpendicular to separation axis):
+Applied tangent to collision (perpendicular to normal):
 
-1. Calculate relative velocity along tangent
-2. Effective friction = average of both blocks: `(A.friction + B.friction) / 2`
-3. Apply friction impulse: `frictionImpulse = relVelTangent * effectiveFriction`
-4. Split 50/50 between both blocks
+1. Calculate relative velocity along tangent (sliding velocity)
+2. Effective friction = geometric mean: `sqrt(A.friction * B.friction)`
+3. Friction impulse directly scales by friction: `tangentImpulse *= friction`
+4. Apply to both blocks based on inverse mass ratio
+
+**Game-friendly friction:** Unlike realistic Coulomb friction (limited by normal force), our friction works even without strong normal contact. This allows high-friction blocks to move together during horizontal drag without requiring them to press vertically.
 
 | Friction Value | Behavior |
 |----------------|----------|
@@ -286,7 +320,7 @@ Applied tangent to collision (perpendicular to separation axis):
 
 ### Contact Graph (Stack Detection)
 
-Functions to detect which blocks are in contact (for future use in friction/impulse propagation):
+Functions to detect which blocks are in contact:
 
 - `isBlockAbove(upper, lower)`: checks if upper block is resting on lower block
   - Vertical contact: `upper.bottom ≈ lower.top` (within CONTACT_TOLERANCE = 0.05m)
@@ -294,16 +328,14 @@ Functions to detect which blocks are in contact (for future use in friction/impu
 - `findBlocksDirectlyAbove(world, block)`: blocks immediately resting on this one
 - `findStackAbove(world, block)`: recursively finds entire stack above
 
-Used during drag to identify stacks that should move as a unit. When dragging starts, the stack above is cached and treated as a rigid body - relative positions are maintained throughout the drag.
+### Dragging (Spring-Based, Physics-Propagated)
 
-### Dragging (Spring-Based with Rigid Stacks)
-
-Dragging uses a spring force applied to the entire stack above the dragged block:
+Dragging applies a spring force **only to the dragged block**. Stacked blocks move via friction through the constraint solver - no special-case handling.
 
 ```
 force = (mousePos - blockPos) * STIFFNESS - velocity * DAMPING
 force = clamp(force, MAX_FORCE)
-acceleration = force / totalStackMass
+acceleration = force / blockMass  // only dragged block
 ```
 
 **Constants:**
@@ -311,18 +343,14 @@ acceleration = force / totalStackMass
 - `DRAG_DAMPING = 10` — prevents oscillation
 - `DRAG_MAX_FORCE = 100` — prevents explosive forces
 
-**Stack behavior during drag:**
-- At drag start, stack above is detected and cached with relative offsets
-- Force is distributed across entire stack based on total mass
-- After each physics step, relative positions are restored (rigid body)
-- All stack blocks get same velocity (they move as a unit)
-- When base hits boundary, entire stack stops together
+**How stacks move together:**
+1. Force applied only to dragged block
+2. Dragged block accelerates, creating relative velocity with block above
+3. Friction constraint detects sliding and applies impulse to resist it
+4. With high friction (1.0), blocks move together naturally
+5. When base hits boundary, friction stops propagating force - upper blocks stop too
 
-**Other behavior:**
-- Block accelerates toward mouse (not teleport)
-- Collisions with non-stack blocks push the dragged block back
-- Heavy stacks resist more (F = ma with total stack mass)
-- Quick movements can fail to move heavy objects
+**No cheating:** We don't cache stack positions or forcibly restore them. The constraint solver handles everything through friction impulses.
 
 ### Mass Effects Summary
 

@@ -5,13 +5,16 @@ import { createBlock, blockToJSON, blockFromJSON, getBounds } from './block.js';
 import {
   applyGravity,
   updatePosition,
-  checkCollision,
-  resolveCollision,
+  detectAllContacts,
+  solveVelocityConstraints,
+  solvePositionConstraints,
   applyDamping,
   constrainToWorld,
+  // Legacy API for backward compatibility
+  checkCollision,
+  resolveCollision,
 } from './physics.js';
 
-export const COLLISION_ITERATIONS = 4;
 const CONTACT_TOLERANCE = 0.05; // meters - how close blocks must be to count as "in contact"
 
 export function createWorld(width, height) {
@@ -79,22 +82,9 @@ export function startDrag(world, blockId, mouseX, mouseY) {
     y: mouseY - block.y,
   };
 
-  // Cache the stack at drag start - they move as a unit
-  const stack = [block, ...findStackAbove(world, block)];
-  // Store relative offsets from base block
-  world.draggedStack = stack.map(b => ({
-    block: b,
-    offsetX: b.x - block.x,
-    offsetY: b.y - block.y,
-  }));
-
   block.isDragging = true;
-
-  // Reset velocity for entire stack - they start fresh as a unit
-  for (const b of stack) {
-    b.vx = 0;
-    b.vy = 0;
-  }
+  block.vx = 0;
+  block.vy = 0;
 }
 
 const DRAG_STIFFNESS = 50;
@@ -102,36 +92,29 @@ const DRAG_DAMPING = 10;
 const DRAG_MAX_FORCE = 100;
 
 export function updateDrag(world, mouseX, mouseY, dt) {
-  if (!world.draggedBlockId || !world.draggedStack) return;
+  if (!world.draggedBlockId) return;
 
   const block = getBlockById(world, world.draggedBlockId);
   if (!block) return;
 
-  // Use cached stack from drag start - they move as a unit
-  const stackEntries = world.draggedStack;
-  const totalMass = stackEntries.reduce((sum, e) => sum + e.block.mass, 0);
-
   const targetX = mouseX - world.dragOffset.x;
   const targetY = mouseY - world.dragOffset.y;
 
-  // Calculate force based on dragged block position
+  // Spring force toward mouse position
   let fx = (targetX - block.x) * DRAG_STIFFNESS - block.vx * DRAG_DAMPING;
   let fy = (targetY - block.y) * DRAG_STIFFNESS - block.vy * DRAG_DAMPING;
 
+  // Clamp force magnitude
   const forceMag = Math.sqrt(fx * fx + fy * fy);
   if (forceMag > DRAG_MAX_FORCE) {
     fx = fx / forceMag * DRAG_MAX_FORCE;
     fy = fy / forceMag * DRAG_MAX_FORCE;
   }
 
-  // Apply force to entire stack (F = ma, so a = F/m for total mass)
-  const ax = fx / totalMass;
-  const ay = fy / totalMass;
-
-  for (const entry of stackEntries) {
-    entry.block.vx += ax * entry.block.mass * dt;
-    entry.block.vy += ay * entry.block.mass * dt;
-  }
+  // Apply force only to dragged block
+  // The constraint solver will propagate to stacked blocks via friction
+  block.vx += fx / block.mass * dt;
+  block.vy += fy / block.mass * dt;
 }
 
 export function endDrag(world) {
@@ -143,7 +126,6 @@ export function endDrag(world) {
   }
 
   world.draggedBlockId = null;
-  world.draggedStack = null;
 }
 
 export function step(world, dt) {
@@ -151,48 +133,32 @@ export function step(world, dt) {
 
   const blocks = world.blocks;
 
-  // Apply gravity
+  // 1. Apply gravity
   blocks.forEach(block => {
     applyGravity(block, dt);
   });
 
-  // Update positions
+  // 2. Update positions (integrate velocities)
   blocks.forEach(block => {
     updatePosition(block, dt);
   });
 
-  // Collision resolution (multiple iterations for stability)
-  for (let iter = 0; iter < COLLISION_ITERATIONS; iter++) {
-    for (let i = 0; i < blocks.length; i++) {
-      for (let j = i + 1; j < blocks.length; j++) {
-        const collision = checkCollision(blocks[i], blocks[j]);
-        if (collision) {
-          resolveCollision(blocks[i], blocks[j], collision, dt);
-        }
-      }
-    }
-  }
+  // 3. Detect all contacts
+  const contacts = detectAllContacts(blocks);
 
-  // Constrain to world bounds
+  // 4. Solve velocity constraints (sequential impulses)
+  // This propagates impulses through the contact graph
+  solveVelocityConstraints(contacts);
+
+  // 5. Solve position constraints (fix penetration)
+  solvePositionConstraints(contacts);
+
+  // 6. Constrain to world bounds
   blocks.forEach(block => {
     constrainToWorld(block, world.width, world.height);
   });
 
-  // Restore relative positions in drag stack AFTER constraints (treat as rigid body)
-  // This ensures the stack moves as a unit and stops together at boundaries
-  if (world.draggedStack && world.draggedStack.length > 1) {
-    const base = world.draggedStack[0].block;
-    for (let i = 1; i < world.draggedStack.length; i++) {
-      const entry = world.draggedStack[i];
-      entry.block.x = base.x + entry.offsetX;
-      entry.block.y = base.y + entry.offsetY;
-      // Match base velocity (including any boundary bounce)
-      entry.block.vx = base.vx;
-      entry.block.vy = base.vy;
-    }
-  }
-
-  // Apply damping
+  // 7. Apply damping
   blocks.forEach(block => {
     applyDamping(block);
   });
@@ -268,40 +234,6 @@ export function findStackAbove(world, block, visited = new Set()) {
   return stack;
 }
 
-// Constrain a stack of blocks as a unit
-function constrainStackToWorld(stack, worldWidth, worldHeight) {
-  // Find the constraint violations for the bottom block
-  const base = stack[0];
-  const bounds = getBounds(base);
-
-  // Right wall - stop entire stack
-  if (bounds.right > worldWidth) {
-    const correction = bounds.right - worldWidth;
-    for (const block of stack) {
-      block.x -= correction;
-      if (block.vx > 0) {
-        block.vx = -Math.abs(block.vx) * block.bounciness;
-      }
-    }
-  }
-
-  // Left wall - stop entire stack
-  if (bounds.left < 0) {
-    const correction = -bounds.left;
-    for (const block of stack) {
-      block.x += correction;
-      if (block.vx < 0) {
-        block.vx = Math.abs(block.vx) * block.bounciness;
-      }
-    }
-  }
-
-  // Apply individual vertical constraints
-  for (const block of stack) {
-    constrainToWorld(block, worldWidth, worldHeight);
-  }
-}
-
 export function exportWorldState(world) {
   return JSON.stringify({
     width: world.width,
@@ -310,3 +242,6 @@ export function exportWorldState(world) {
     blockTemplates: world.blockTemplates,
   }, null, 2);
 }
+
+// Re-export for backward compatibility with tests
+export { checkCollision, resolveCollision };
