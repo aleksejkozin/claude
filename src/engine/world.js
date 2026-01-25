@@ -79,9 +79,22 @@ export function startDrag(world, blockId, mouseX, mouseY) {
     y: mouseY - block.y,
   };
 
+  // Cache the stack at drag start - they move as a unit
+  const stack = [block, ...findStackAbove(world, block)];
+  // Store relative offsets from base block
+  world.draggedStack = stack.map(b => ({
+    block: b,
+    offsetX: b.x - block.x,
+    offsetY: b.y - block.y,
+  }));
+
   block.isDragging = true;
-  block.vx = 0;
-  block.vy = 0;
+
+  // Reset velocity for entire stack - they start fresh as a unit
+  for (const b of stack) {
+    b.vx = 0;
+    b.vy = 0;
+  }
 }
 
 const DRAG_STIFFNESS = 50;
@@ -89,14 +102,19 @@ const DRAG_DAMPING = 10;
 const DRAG_MAX_FORCE = 100;
 
 export function updateDrag(world, mouseX, mouseY, dt) {
-  if (!world.draggedBlockId) return;
+  if (!world.draggedBlockId || !world.draggedStack) return;
 
   const block = getBlockById(world, world.draggedBlockId);
   if (!block) return;
 
+  // Use cached stack from drag start - they move as a unit
+  const stackEntries = world.draggedStack;
+  const totalMass = stackEntries.reduce((sum, e) => sum + e.block.mass, 0);
+
   const targetX = mouseX - world.dragOffset.x;
   const targetY = mouseY - world.dragOffset.y;
 
+  // Calculate force based on dragged block position
   let fx = (targetX - block.x) * DRAG_STIFFNESS - block.vx * DRAG_DAMPING;
   let fy = (targetY - block.y) * DRAG_STIFFNESS - block.vy * DRAG_DAMPING;
 
@@ -106,8 +124,14 @@ export function updateDrag(world, mouseX, mouseY, dt) {
     fy = fy / forceMag * DRAG_MAX_FORCE;
   }
 
-  block.vx += fx * dt;
-  block.vy += fy * dt;
+  // Apply force to entire stack (F = ma, so a = F/m for total mass)
+  const ax = fx / totalMass;
+  const ay = fy / totalMass;
+
+  for (const entry of stackEntries) {
+    entry.block.vx += ax * entry.block.mass * dt;
+    entry.block.vy += ay * entry.block.mass * dt;
+  }
 }
 
 export function endDrag(world) {
@@ -119,6 +143,7 @@ export function endDrag(world) {
   }
 
   world.draggedBlockId = null;
+  world.draggedStack = null;
 }
 
 export function step(world, dt) {
@@ -152,6 +177,20 @@ export function step(world, dt) {
   blocks.forEach(block => {
     constrainToWorld(block, world.width, world.height);
   });
+
+  // Restore relative positions in drag stack AFTER constraints (treat as rigid body)
+  // This ensures the stack moves as a unit and stops together at boundaries
+  if (world.draggedStack && world.draggedStack.length > 1) {
+    const base = world.draggedStack[0].block;
+    for (let i = 1; i < world.draggedStack.length; i++) {
+      const entry = world.draggedStack[i];
+      entry.block.x = base.x + entry.offsetX;
+      entry.block.y = base.y + entry.offsetY;
+      // Match base velocity (including any boundary bounce)
+      entry.block.vx = base.vx;
+      entry.block.vy = base.vy;
+    }
+  }
 
   // Apply damping
   blocks.forEach(block => {
@@ -227,6 +266,40 @@ export function findStackAbove(world, block, visited = new Set()) {
   }
 
   return stack;
+}
+
+// Constrain a stack of blocks as a unit
+function constrainStackToWorld(stack, worldWidth, worldHeight) {
+  // Find the constraint violations for the bottom block
+  const base = stack[0];
+  const bounds = getBounds(base);
+
+  // Right wall - stop entire stack
+  if (bounds.right > worldWidth) {
+    const correction = bounds.right - worldWidth;
+    for (const block of stack) {
+      block.x -= correction;
+      if (block.vx > 0) {
+        block.vx = -Math.abs(block.vx) * block.bounciness;
+      }
+    }
+  }
+
+  // Left wall - stop entire stack
+  if (bounds.left < 0) {
+    const correction = -bounds.left;
+    for (const block of stack) {
+      block.x += correction;
+      if (block.vx < 0) {
+        block.vx = Math.abs(block.vx) * block.bounciness;
+      }
+    }
+  }
+
+  // Apply individual vertical constraints
+  for (const block of stack) {
+    constrainToWorld(block, worldWidth, worldHeight);
+  }
 }
 
 export function exportWorldState(world) {

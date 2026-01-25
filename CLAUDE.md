@@ -12,6 +12,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 When fixing bugs, prefer well-known algorithmic solutions over special-case patches. Adding conditionals and edge-case handling accumulates "scars" in the code. If a problem requires many special cases to fix, step back and consider whether the fundamental approach is wrong. Look for established algorithms that solve the problem class correctly.
 
+Never weaken tests to hide bugs. If a test fails, fix the code, not the test. Tests define correct behavior - loosening tolerances or removing assertions to make tests pass is forbidden. The only valid reasons to change a test are: (1) the test itself is wrong, or (2) requirements changed.
+
 ## Project Overview
 
 Tower Builder is a physics-based tower building game where players drag and drop blocks to build towers. Currently in dev mode with a physics engine - game mode with enemies is planned for later.
@@ -280,9 +282,7 @@ Applied tangent to collision (perpendicular to separation axis):
 | 0.0 | Frictionless (ice) |
 | 0.2 | Slippery |
 | 0.5 | Normal (default) |
-| 1.0 | High grip (reduces slippage but not perfect) |
-
-Known limitation: The current impulse-based friction only equalizes velocities per collision pair. In tall stacks, the correction doesn't fully propagate in one frame, causing blocks to drift slightly during fast drags. A proper fix requires constraint-based physics (like Box2D) or iterative position solvers that treat the stack as a connected system.
+| 1.0 | High grip (stacked blocks move together during drag) |
 
 ### Contact Graph (Stack Detection)
 
@@ -294,16 +294,16 @@ Functions to detect which blocks are in contact (for future use in friction/impu
 - `findBlocksDirectlyAbove(world, block)`: blocks immediately resting on this one
 - `findStackAbove(world, block)`: recursively finds entire stack above
 
-Currently used for detection only. Friction still drives physics - blocks are NOT rigidly attached during drag. Fast movements can cause blocks to slip or fly off due to inertia.
+Used during drag to identify stacks that should move as a unit. When dragging starts, the stack above is cached and treated as a rigid body - relative positions are maintained throughout the drag.
 
-### Dragging (Spring-Based)
+### Dragging (Spring-Based with Rigid Stacks)
 
-Dragging uses a spring force - no special physics exceptions:
+Dragging uses a spring force applied to the entire stack above the dragged block:
 
 ```
 force = (mousePos - blockPos) * STIFFNESS - velocity * DAMPING
 force = clamp(force, MAX_FORCE)
-velocity += force * dt
+acceleration = force / totalStackMass
 ```
 
 **Constants:**
@@ -311,12 +311,18 @@ velocity += force * dt
 - `DRAG_DAMPING = 10` — prevents oscillation
 - `DRAG_MAX_FORCE = 100` — prevents explosive forces
 
-**Behavior:**
+**Stack behavior during drag:**
+- At drag start, stack above is detected and cached with relative offsets
+- Force is distributed across entire stack based on total mass
+- After each physics step, relative positions are restored (rigid body)
+- All stack blocks get same velocity (they move as a unit)
+- When base hits boundary, entire stack stops together
+
+**Other behavior:**
 - Block accelerates toward mouse (not teleport)
-- Collisions push the dragged block back (mouse doesn't win)
-- Heavy stacks resist more
+- Collisions with non-stack blocks push the dragged block back
+- Heavy stacks resist more (F = ma with total stack mass)
 - Quick movements can fail to move heavy objects
-- Blocks never overlap (collision separation always applies)
 
 ### Mass Effects Summary
 

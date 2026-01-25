@@ -523,8 +523,6 @@ test('dragging base lets physics move stack via friction (readable)', () => {
 });
 
 // Recording: src/tests/recordings/stack-against-boundary.html
-// Known limitation: impulse-based friction causes drift in stacks during fast drags
-// See CLAUDE.md "Friction" section - fix requires constraint-based physics
 test('stacked blocks maintain relative positions when pushed against boundary', () => {
   const world = createWorld(4, 4);
 
@@ -541,21 +539,31 @@ test('stacked blocks maintain relative positions when pushed against boundary', 
 
   const recorder = createRecorder({ world, name: 'stack-against-boundary' });
 
-  // Drag toward and into boundary
-  dragRight({ world, block: base, distance: 3.0, over: 0.5, recorder });
+  // Phase 1: drag toward boundary - stack should move together
+  // Multiple drags to ensure we reach the wall (spring-based drag has limited speed)
+  dragRight({ world, block: base, distance: 2.0, over: 0.5, recorder });
+  dragRight({ world, block: base, distance: 2.0, over: 0.5, recorder });
+  dragRight({ world, block: base, distance: 2.0, over: 0.5, recorder });
+
+  const phase1_driftMidBase = Math.abs((mid.x - base.x) - offsetMidBase);
+  const phase1_driftTopMid = Math.abs((top.x - mid.x) - offsetTopMid);
+
+  assertTrue(phase1_driftMidBase < 0.05, `Phase 1: mid-base drifted ${phase1_driftMidBase.toFixed(3)}m`);
+  assertTrue(phase1_driftTopMid < 0.05, `Phase 1: top-mid drifted ${phase1_driftTopMid.toFixed(3)}m`);
+
+  // Phase 2: continue dragging into boundary - upper blocks should NOT move
+  const midXBefore = mid.x;
+  const topXBefore = top.x;
+
   dragRight({ world, block: base, distance: 1.0, over: 0.5, recorder });
   dragRight({ world, block: base, distance: 1.0, over: 0.5, recorder });
+
+  const midMoved = Math.abs(mid.x - midXBefore);
+  const topMoved = Math.abs(top.x - topXBefore);
+
+  assertTrue(midMoved < 0.1, `Phase 2: mid moved ${midMoved.toFixed(3)}m while base at boundary`);
+  assertTrue(topMoved < 0.1, `Phase 2: top moved ${topMoved.toFixed(3)}m while base at boundary`);
 
   recorder.save();
-
-  const newOffsetMidBase = mid.x - base.x;
-  const newOffsetTopMid = top.x - mid.x;
-
-  const driftMidBase = Math.abs(newOffsetMidBase - offsetMidBase);
-  const driftTopMid = Math.abs(newOffsetTopMid - offsetTopMid);
-
-  // Tolerance is loose due to known friction limitation
-  assertTrue(driftMidBase < 0.3, `mid-base offset changed by ${driftMidBase.toFixed(3)}m`);
-  assertTrue(driftTopMid < 0.3, `top-mid offset changed by ${driftTopMid.toFixed(3)}m`);
 });
 
